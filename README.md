@@ -20,7 +20,7 @@ Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and logi
 EC2 instance
 - `ec2Name`: EC2 instance name 
 - `ec2KeyPair`: [EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) name. [Create key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html) if necessary
-- `osVersion`: Operating System version and processor architecture
+- `osVersion`: Operating System version and processor architecture. Default architecture is [Graviton](https://aws.amazon.com/ec2/graviton/) arm64
 - `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches processor architecture. Default is `t4g.medium` [burstable instance type](https://aws.amazon.com/ec2/instance-types/t4/). For best performance, consider [M6g](https://aws.amazon.com/ec2/instance-types/m6g/) or [M7g](https://aws.amazon.com/ec2/instance-types/m7g/) for general purpose workloads
 
 Network
@@ -39,7 +39,7 @@ Remote Administration
 
 Nextcloud options
 - `adminUserName`: Nextcloud admin username. Default is `admin`
-- `phpVersion`: PHP version to install
+- `phpVersion`: PHP version to install. Uses [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) PPA 
 - `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
 - `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) to associate uploaded file with. Default is `STANDARD`
 
@@ -48,10 +48,10 @@ EBS
 - `volumeType`: [EBS General Purpose Volume](https://aws.amazon.com/ebs/general-purpose/) type
 
 AWS Backup
-- `backupResource`: backup EC2 instance, S3 bucket or both. Default is `EC2-and-S3`. Select `none` not to schedule backups
+- `backupResource`: backup EC2 instance, S3 bucket, both or none. Default is `EC2-and-S3` 
 - `scheduleExpression`: CRON expression specifying when AWS Backup initiates a backup job. Default is `cron(0 1 ? * * *)`
-- `scheduleExpressionTimezone`: Timezone in which the schedule expression is set. Default is `Etc/UTC`
-- `deleteAfterDays`: Number of days after creation that a recovery point is deleted. Default is `7` days
+- `scheduleExpressionTimezone`: timezone in which the schedule expression is set. Default is `Etc/UTC`
+- `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `7` days
 
 
 It may take more than 30 minutes to provision the entire stack. After your stack has been successfully created, its status changes to **CREATE_COMPLETE**.
@@ -61,12 +61,12 @@ It may take more than 30 minutes to provision the entire stack. After your stack
 The following are available in **Outputs** section 
 
 - `DCVwebConsole` (if `installDCV` is `Yes`): NICE DCV web browser console URL link. Login as user specified in *Description* field. 
-- `EC2console`: EC2 console URL link to your EC2 instance.
-- `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html).
+- `EC2console`: EC2 console URL link to your EC2 instance
+- `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
 - `SetPasswordCmd`: command to set Nextcloud admin password
-- `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link.
-- `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` using `EC2instanceConnect`, `SSMsessionManager` or SSH session first.  
-- `WebUrl`: EC2 web server URL link. 
+- `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
+- `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` using `EC2instanceConnect`, `SSMsessionManager` or SSH session first
+- `WebUrl`: EC2 web server URL link
 
 ### Nextcloud admin user password
 Use either EC2 instance connect or SSM session manager URL link to obtain in-browser terminal access to your EC2 instance. Copy and paste `SetPasswordCmd` value to set Nextcloud admin password. For example, if `adminUserName` value is `admin`, the command is
@@ -142,28 +142,28 @@ To prevent your CloudFormation stack resources from accidental deletion, you can
 ### Filter IAM policy source IP
 As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with programmatic access to S3 bucket. User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
 
-The created user name can be located in CloudFormation **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view IAM user permission in IAM console. Edit attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your policy should look similar to below
+The created user name can be located in CloudFormation **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view IAM user permission in IAM console. Edit attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
 ```
 {
-	"Version": "2012-10-17",
-	"Statement": [
-		{
-			"Condition": {
-				"IpAddress": {
-					"aws:SourceIp": "1.2.3.4/32"
-				}
-			},
-			"Action": [
-				"s3:*"
-			],
-			"Resource": [
-				"arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f",
-				"arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f/*"
-			],
-			"Effect": "Allow"
-		}
-	]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": "1.2.3.4/32"
+        }
+      },
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f",
+        "arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f/*"
+      ],
+      "Effect": "Allow"
+    }
+  ]
 }
 ```
 This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
@@ -174,7 +174,7 @@ This ensures that that even when the security credentials are leaked, an attacke
 S3 is used to to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) has [performance benefits](
 https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html). 
 
-Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
+Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
 
 ### Recovery points protection
 To protect backups (recovery points) from inadvertent or malicious deletions, you can enable [AWS Backup Vault Lock](https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html) in compliance mode to provide immutable WORM (write-once, read-many) backups. Vaults that are locked in compliance mode *cannot be deleted* once the cooling-off period ("grace time") expires if any recovery points are in the vault. Refer to [Protecting data with AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/protecting-data-with-aws-backup-vault-lock/) for more information. 
