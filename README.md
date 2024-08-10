@@ -1,5 +1,5 @@
 # nextcloud-server
-[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running Nextcloud file synchronization and sharing server, that uses [Amazon S3](https://aws.amazon.com/s3/) as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection.
+[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running Nextcloud file synchronization and sharing server, with [Amazon S3](https://aws.amazon.com/s3/) as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection.
 
 ## Notice
 Although this repository is released under the [MIT-0](LICENSE) license, its CloudFormation template uses features from [Nextcloud](https://github.com/nextcloud/server) project. Nextcloud project's licensing includes the [AGPL](https://github.com/nextcloud/server?tab=AGPL-3.0-1-ov-file) license.
@@ -139,10 +139,10 @@ Refer to Nextcloud [documentation site](https://docs.nextcloud.com/)
 ### Cloudformation termination protection
 To prevent your CloudFormation stack resources from accidental deletion, you can enable termination protection. Refer to [Protecting a stack from being deleted](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html) for instructions.
 
-### Filter IAM source IP
-The CloudFormation template creates an IAM user with inline policy for access to S3 bucket. Access key credentials are stored in `/var/www/html/config/config.php` on your EC2 instance. If `assignStaticIP` is `Yes`, you can limit the use of the access key to requests made by your Nextcloud server.
+### Filter IAM policy source IP
+As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with programmatic access to S3 bucket. User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
 
-The created user name can be located in CloudFormation **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view IAM user permission in IAM console. Edit attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your policy should look similar to this
+The created user name can be located in CloudFormation **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view IAM user permission in IAM console. Edit attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your policy should look similar to below
 
 ```
 {
@@ -166,7 +166,8 @@ The created user name can be located in CloudFormation **Resources** section wit
 	]
 }
 ```
-This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address. 
+This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
+
 
 
 ### S3 primary storage
@@ -175,7 +176,7 @@ https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primar
 
 Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
 
-### Backup (recovery points) protection
+### Recovery points protection
 To protect backups (recovery points) from inadvertent or malicious deletions, you can enable [AWS Backup Vault Lock](https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html) in compliance mode to provide immutable WORM (write-once, read-many) backups. Vaults that are locked in compliance mode *cannot be deleted* once the cooling-off period ("grace time") expires if any recovery points are in the vault. Refer to [Protecting data with AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/protecting-data-with-aws-backup-vault-lock/) for more information. 
 
 
@@ -185,7 +186,6 @@ To futher secure your EC2 instance, you may want to
 - Remove NICE DCV web browser client by removing `nice-dcv-web-viewer` package and connect using native Windows, MacOS or Linux [clients](https://docs.aws.amazon.com/dcv/latest/userguide/client.html).
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
 - Disable SSH access from public internet. Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access. If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
-- Enable [AWS Backup](https://aws.amazon.com/backup) and enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) for enhanced data protection. Refer to [documentation](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html) for instructions on restoring EC2 instance. 
 - Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to scan EC2 instance for software vulnerabilities and unintended network exposure.
 - Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) security monitoring service with [Malware Protection](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html) to detect the potential presence of malware in EBS volumes.
 
