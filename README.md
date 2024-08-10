@@ -4,7 +4,9 @@
 ## Notice
 Although this repository is released under the [MIT-0](LICENSE) license, its CloudFormation template uses features from [Nextcloud](https://github.com/nextcloud/server) project. Nextcloud project's licensing includes the [AGPL](https://github.com/nextcloud/server?tab=AGPL-3.0-1-ov-file) license.
 
-Usage indicates acceptance of [Nextcloud server](https://github.com/nextcloud/server) license and license agreements of all software that is installed in the EC2 instance. 
+The template offers the option to install [Webmin](https://github.com/webmin/webmin) which is licensed under [BSD-3-Clause](https://github.com/webmin/webmin?tab=BSD-3-Clause-1-ov-file) license. 
+
+Usage of template indicates acceptance of license agreements of all software that is installed in the EC2 instance. 
 
 
 ## Architecture diagram
@@ -30,6 +32,8 @@ Network
 Remote Administration
 - `ingressIPv4`: allowed IPv4 internet source prefix to SSH, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
 - `ingressIPv6`: allowed IPv6 internet source prefix to SSH. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
+- `installDCV`: install graphical desktop environment and [NICE DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
+- `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 - `allowSSHport`: allow inbound SSH from `ingressIPv4` and `ingressIPv6`. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `Yes`
 
 
@@ -38,7 +42,6 @@ Nextcloud options
 - `phpVersion`: PHP version to install
 - `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
 - `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) to associate uploaded file with. Default is `STANDARD`
-- `installDCV`: install graphical desktop environment and [NICE DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 
 EBS
 - `volumeSize`: [Amazon EBS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html) volume size
@@ -51,7 +54,7 @@ AWS Backup
 - `deleteAfterDays`: Number of days after creation that a recovery point is deleted. Default is `7` days
 
 
-It may take up to 30 minutes to provision the entire stack. After your stack has been successfully created, its status changes to **CREATE_COMPLETE**.
+It may take more than 30 minutes to provision the entire stack. After your stack has been successfully created, its status changes to **CREATE_COMPLETE**.
 
 
 ### CloudFormation Outputs
@@ -60,9 +63,10 @@ The following are available in **Outputs** section
 - `DCVwebConsole` (if `installDCV` is `Yes`): NICE DCV web browser console URL link. Login as user specified in *Description* field. 
 - `EC2console`: EC2 console URL link to your EC2 instance.
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html).
-- `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link.
-- `WebUrl`: EC2 web server URL link. 
 - `SetPasswordCmd`: command to set Nextcloud admin password
+- `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link.
+- `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` using `EC2instanceConnect`, `SSMsessionManager` or SSH session first.  
+- `WebUrl`: EC2 web server URL link. 
 
 ### Nextcloud admin user password
 Use either EC2 instance connect or SSM session manager URL link to obtain in-browser terminal access to your EC2 instance. Copy and paste `SetPasswordCmd` value to set Nextcloud admin password. For example, if `adminUserName` value is `admin`, the command is
@@ -135,15 +139,55 @@ Refer to Nextcloud [documentation site](https://docs.nextcloud.com/)
 ### Cloudformation termination protection
 To prevent your CloudFormation stack resources from accidental deletion, you can enable termination protection. Refer to [Protecting a stack from being deleted](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html) for instructions.
 
+### Filter IAM source IP
+The CloudFormation template creates an IAM user with inline policy for access to S3 bucket. Access key credentials are stored in `/var/www/html/config/config.php` on your EC2 instance. If `assignStaticIP` is `Yes`, you can limit the use of the access key to requests made by your Nextcloud server.
+
+The created user name can be located in CloudFormation **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view IAM user permission in IAM console. Edit attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your policy should look similar to this
+
+```
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Condition": {
+				"IpAddress": {
+					"aws:SourceIp": "1.2.3.4/32"
+				}
+			},
+			"Action": [
+				"s3:*"
+			],
+			"Resource": [
+				"arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f",
+				"arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f/*"
+			],
+			"Effect": "Allow"
+		}
+	]
+}
+```
+This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address. 
+
+
 ### S3 primary storage
 S3 is used to to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) has [performance benefits](
 https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html). 
 
 Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
 
-
 ### Backup (recovery points) protection
 To protect backups (recovery points) from inadvertent or malicious deletions, you can enable [AWS Backup Vault Lock](https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html) in compliance mode to provide immutable WORM (write-once, read-many) backups. Vaults that are locked in compliance mode *cannot be deleted* once the cooling-off period ("grace time") expires if any recovery points are in the vault. Refer to [Protecting data with AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/protecting-data-with-aws-backup-vault-lock/) for more information. 
+
+
+## Secure EC2 instance
+
+To futher secure your EC2 instance, you may want to
+- Remove NICE DCV web browser client by removing `nice-dcv-web-viewer` package and connect using native Windows, MacOS or Linux [clients](https://docs.aws.amazon.com/dcv/latest/userguide/client.html).
+- Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
+- Disable SSH access from public internet. Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access. If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
+- Enable [AWS Backup](https://aws.amazon.com/backup) and enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) for enhanced data protection. Refer to [documentation](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html) for instructions on restoring EC2 instance. 
+- Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to scan EC2 instance for software vulnerabilities and unintended network exposure.
+- Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) security monitoring service with [Malware Protection](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html) to detect the potential presence of malware in EBS volumes.
 
 
 ## Clean Up
