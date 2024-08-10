@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Nextcloud ( https://github.com/aws-samples/ec2-nextcloud )
+Description: Nextcloud ( https://github.com/aws-samples/nextcloud-server )
 Transform: "AWS::LanguageExtensions"
 
 Metadata:
@@ -25,9 +25,9 @@ Metadata:
       - Label:
           default: EC2 instance
         Parameters:
-          - osVersion
           - ec2Name
           - ec2KeyPair
+          - osVersion
           - instanceType
       - Label:
           default: Network
@@ -42,6 +42,8 @@ Metadata:
           - ingressIPv4
           - ingressIPv6
           - allowSSHport
+          - installDCV
+          - installWebmin
       - Label:
           default: Nextcloud options
         Parameters:
@@ -49,7 +51,6 @@ Metadata:
           - phpVersion
           - databaseOption
           - s3StorageClass
-          - installDCV
       - Label:
           default: EBS volume
         Parameters:
@@ -89,6 +90,8 @@ Metadata:
         default: "Allowed IPv6 prefix to SSH and NICE DCV(if enabled)"
       allowSSHport:
         default: "Allow SSH from internet"
+      installWebMin:
+        default: "Install Webmin web-based system administration tool"
       databaseOption:
         default: "Database server to install"
       phpVersion:
@@ -183,11 +186,29 @@ Parameters:
       - "Yes"
       - "No"
     Default: "Yes"
+  installDCV:
+    Type: String
+    Description: https://aws.amazon.com/hpc/dcv/
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "No"
+  installWebmin:
+    Type: String
+    Description: https://webmin.com/
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "No"
+
+  adminUsername:
+    Type: String
+    AllowedPattern: ".+"
+    Default: "admin"
   phpVersion:
     Type: String
     AllowedValues:
       - "php8.3"
-      - "php8.2"
     Default: "php8.3"
   databaseOption:
     Type: String
@@ -195,12 +216,6 @@ Parameters:
       - "MariaDB"
       - "MySQL"
     Default: "MariaDB"
-  installDCV:
-    Type: String
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "No"
   s3StorageClass:
     Type: String
     AllowedValues:
@@ -210,11 +225,6 @@ Parameters:
       - STANDARD
       - STANDARD_IA
     Default: STANDARD
-
-  adminUsername:
-    Type: String
-    AllowedPattern: ".+"
-    Default: "admin"
 
   backupResource:
     Type: String
@@ -609,7 +619,9 @@ Conditions:
   createEICsg: !And [!Condition hasEIC, !Condition displayPublicIP]
   createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
   installDCV: !Equals [!Ref installDCV, "Yes"]
-  noDCV: !Equals [!Ref installDCV, "No"]
+  noDCV: !Not [!Condition installDCV]
+  installWebmin: !Equals [!Ref installWebmin, "Yes"]
+
   backupEC2:
     !Or [
       !Equals [!Ref backupResource, "EC2"],
@@ -720,7 +732,7 @@ Resources:
         - Key: StackId
           Value: !Ref AWS::StackId
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
   instanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -735,6 +747,22 @@ Resources:
       GroupDescription: Allow inbound SSH, HTTP, HTTPS
       VpcId: !Ref vpcID
       SecurityGroupIngress:
+        - !If
+          - installWebmin
+          - Description: Webmin (IPv4)
+            IpProtocol: tcp
+            FromPort: 10000
+            ToPort: 10000
+            CidrIp: !Ref ingressIPv4
+          - !Ref AWS::NoValue
+        - !If
+          - installWebmin
+          - Description: Webmin (IPv6)
+            IpProtocol: tcp
+            FromPort: 10000
+            ToPort: 10000
+            CidrIpv6: !Ref ingressIPv6
+          - !Ref AWS::NoValue
         - !If
           - createSgSSH
           - Description: SSH (IPv4)
@@ -832,7 +860,7 @@ Resources:
                   !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
                 ]
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
   iamUser:
     Type: AWS::IAM::User
@@ -845,17 +873,19 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:*
-                  - s3-object-lambda:*
                 Resource:
                   - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}"
                   - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*"
+                Condition:
+                  IpAddress:
+                    aws:SourceIp: 0.0.0.0/0
       Tags:
         - Key: StackName
           Value: !Ref AWS::StackName
         - Key: StackId
           Value: !Ref AWS::StackId
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
   userAccessKey:
     Type: AWS::IAM::AccessKey
@@ -881,7 +911,7 @@ Resources:
         - Key: StackId
           Value: !Ref AWS::StackId
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
   ec2Instance:
     Type: AWS::EC2::Instance
@@ -1142,9 +1172,10 @@ Resources:
                 # Resolve imagick no SVG support security warning
                 apt-get install -q -y libmagickcore-*-extra
 
-                # PHP from Ondrej repo
+                # PHP from Ondrej repo: https://deb.sury.org/
                 apt-get install -q -y ca-certificates apt-transport-https software-properties-common lsb-release
-                add-apt-repository ppa:ondrej/php -y
+                add-apt-repository -y ppa:ondrej/php
+                add-apt-repository -y ppa:ondrej/apache2
 
                 # PHP and Apache install
                 apt-get install -q -y ${phpVersion} ${phpVersion}-{common,fpm,opcache,apcu} apache2 libapache2-mod-fcgid
@@ -1174,7 +1205,7 @@ Resources:
                 sed -i "s/^output_buffering/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
                 sed -i "/^;output_buffering/a output_buffering=Off" /etc/php/$PHP_VERSION/fpm/php.ini
 
-                sed -i 's/memory_limit =.*/memory_limit = 3072M/' /etc/php/$PHP_VERSION/fpm/php.ini
+                sed -i 's/memory_limit =.*/memory_limit = 1024M/' /etc/php/$PHP_VERSION/fpm/php.ini
 
                 sed -i 's/upload_max_filesize =.*/upload_max_filesize = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
                 sed -i 's/post_max_size =.*/post_max_size = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
@@ -1323,13 +1354,6 @@ Resources:
                 # Enable apps
                 sudo -u www-data php occ app:enable files_external
 
-                # ClamAV for antivirus app. Note: use clamd (daemon) in config
-                # apt-get install -q -y clamav-daemon
-                # systemctl enable --now clamav-daemon clamav-freshclam 
-
-                # GeoIP
-                # apt-get install -q -y geoip-bin geoip-database geoipupdate
-
                 # sendmail
                 apt-get install -q -y sendmail
 
@@ -1387,9 +1411,10 @@ Resources:
                        'port' => 0,
                        'timeout' => 0.0,
                   ],
+                  'mysql.utf8mb4' => true,
                   'htaccess.RewriteBase' => '/',
                   'defaultapp' => 'files',
-                  'skeletondirectory' => '/var/www/html/core/skeleton', # set to '' to not copy any skeleton files
+                  'skeletondirectory' => '/var/www/html/core/skeleton', # set to '' to not copy any skeleton files                  
                   'objectstore' => array(
                     'class' => 'OC\\Files\\ObjectStore\\S3',
                     'arguments' => array(
@@ -1513,6 +1538,16 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
           usermod -a -G www-data cwagent
           systemctl enable --now amazon-cloudwatch-agent
+          # Webmin
+          export webmin="${installWebmin}"
+          case $webmin in
+            Yes) # https://webmin.com/download/
+              cd /tmp/cfn
+              curl -s -L -O https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
+              echo 'Y' | sh ./setup-repos.sh
+              apt-get install -q -y webmin --install-recommends
+              ;;
+          esac
 
           #
           systemctl set-default multi-user.target
@@ -1532,7 +1567,7 @@ Resources:
         - Key: StackId
           Value: !Ref AWS::StackId
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
   elasticIP:
     Condition: useElasticIP
@@ -1555,7 +1590,7 @@ Resources:
                   !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
                 ]
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
   backupPlan:
     Type: AWS::Backup::BackupPlan
@@ -1591,11 +1626,7 @@ Resources:
     Properties:
       BackupVaultName: !Sub
         - "${AWS::StackName}-backupVault-${UID}"
-        - UID:
-            !Select [
-              3,
-              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-            ]
+        - UID: !Select [5, !Split ["-", !Sub "${AWS::StackId}"]]
 
   backupSelection:
     Type: AWS::Backup::BackupSelection
@@ -1603,7 +1634,7 @@ Resources:
     Properties:
       BackupPlanId: !Ref backupPlan
       BackupSelection:
-        IamRoleArn: !GetAtt backupRole.Arn
+        IamRoleArn: !GetAtt backupRestoreRole.Arn
         Resources:
           - !If
             - backupS3
@@ -1617,7 +1648,7 @@ Resources:
           - "${AWS::StackName}-backupSelection-${UID}"
           - UID: !Select [5, !Split ["-", !Sub "${AWS::StackId}"]]
 
-  backupRole:
+  backupRestoreRole:
     Type: AWS::IAM::Role
     Condition: createBackup
     Properties:
@@ -1628,6 +1659,15 @@ Resources:
             Principal:
               Service: backup.amazonaws.com
             Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: restore-EC2-instance-profile
+          PolicyDocument: # https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt instanceIamRole.Arn
       ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
@@ -1639,7 +1679,7 @@ Resources:
         - Key: StackId
           Value: !Ref AWS::StackId
         - Key: GitHub
-          Value: https://github.com/aws-samples/ec2-nextcloud
+          Value: https://github.com/aws-samples/nextcloud-server
 
 Outputs:
   SetPasswordCmd:
@@ -1659,21 +1699,10 @@ Outputs:
     Condition: noDCV
     Description: SSM Session Manager
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
-
   SSMsessionManagerDCV:
     Condition: installDCV
     Description: SSM Session Manager ("sudo passwd ubuntu" to set password for NICE DCV login)
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
-
-  DCVwebConsole:
-    Condition: installDCV
-    Description: NICE DCV web browser client (login as ubuntu)
-    Value:
-      !If [
-        displayPublicIP,
-        !Sub "https://${ec2Instance.PublicIp}:8443",
-        !Sub "https://${ec2Instance.PrivateIp}:8443",
-      ]
 
   WebUrl:
     Description: Website
@@ -1682,4 +1711,24 @@ Outputs:
         displayPublicIP,
         !Sub "https://${ec2Instance.PublicIp}",
         !Sub "https://${ec2Instance.PrivateIp}",
+      ]
+
+  DCVwebConsole:
+    Condition: installDCV
+    Description: NICE DCV web browser client (login as ec2-user)
+    Value:
+      !If [
+        displayPublicIP,
+        !Sub "https://${ec2Instance.PublicIp}:8443",
+        !Sub "https://${ec2Instance.PrivateIp}:8443",
+      ]
+
+  WebminUrl:
+    Condition: installWebmin
+    Description: Webmin (set root password and login as root)
+    Value:
+      !If [
+        displayPublicIP,
+        !Sub "https://${ec2Instance.PublicIp}:10000",
+        !Sub "https://${ec2Instance.PrivateIp}:10000",
       ]
