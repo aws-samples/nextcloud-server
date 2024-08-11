@@ -30,12 +30,11 @@ Network
 - `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Default is `Yes`
 
 Remote Administration
-- `ingressIPv4`: allowed IPv4 internet source prefix to SSH, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
-- `ingressIPv6`: allowed IPv6 internet source prefix to SSH. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
+- `ingressIPv4`: allowed IPv4 internet source prefix to remote administration ports such as SSH, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
+- `ingressIPv6`: allowed IPv6 internet source prefix  to remote administration ports such as SSH. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
 - `installDCV`: install graphical desktop environment and [NICE DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 - `allowSSHport`: allow inbound SSH from `ingressIPv4` and `ingressIPv6`. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `Yes`
-
 
 Nextcloud options
 - `adminUserName`: Nextcloud admin username. Default is `admin`
@@ -106,7 +105,7 @@ sudo certbot --apache
 Follow instructions to have certbot request and install certificate on your Apache web server. Open a browser to your website to verify that TLS certificate is properly installed. 
 
 ### Configure HSTS
-To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security), edit `*ssl.conf` file in `/etc/apache2/sites-available/` folder and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
+To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security) headers, edit `*ssl.conf` file in `/etc/apache2/sites-available/` folder and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
 
 ```
     <IfModule mod_headers.c>
@@ -140,9 +139,9 @@ Refer to Nextcloud [documentation site](https://docs.nextcloud.com/)
 To prevent your CloudFormation stack resources from accidental deletion, you can enable termination protection. Refer to [Protecting a stack from being deleted](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html) for instructions.
 
 ### Filter IAM policy source IP
-As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with programmatic access to S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
+As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with programmatic access to Nextcloud server S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
 
-The created user name can be located in CloudFormation **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view IAM user permission in IAM console. Edit attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
+The created IAM user can be located in CloudFormation stack **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view user permission in IAM console. Edit inline attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
 ```
 {
@@ -166,9 +165,9 @@ The created user name can be located in CloudFormation **Resources** section wit
   ]
 }
 ```
-This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
+This modification ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
 
-User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. The credentials may be used to mount other S3 buckets in your AWS account as [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html) by modifying inline policy `Resource` key to include desired S3 buckets. 
+User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. To use the credentials to mount other S3 buckets in your AWS account as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), modify associated IAM user inline policy `Resource` key to include the S3 bucket names. 
 
 
 
@@ -185,12 +184,11 @@ To protect backups (recovery points) from inadvertent or malicious deletions, yo
 ## Secure EC2 instance
 
 To futher secure your EC2 instance, you may want to
-- Remove NICE DCV web browser client by removing `nice-dcv-web-viewer` package and connect using native Windows, MacOS or Linux [clients](https://docs.aws.amazon.com/dcv/latest/userguide/client.html).
+- Remove NICE DCV web browser client package by running the command `sudo apt remove -y nice-dcv-web-viewer`. Connect using native Windows, MacOS or Linux [client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html).
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
-- Disable SSH access from public internet. Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access. If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
-- Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to scan EC2 instance for software vulnerabilities and unintended network exposure.
-- Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) security monitoring service with [Malware Protection](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html) to detect the potential presence of malware in EBS volumes.
-
+- Disable SSH access from public internet (`allowSSHport`). Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access. If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
+- Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to scan EC2 instance for software vulnerabilities and unintended network exposure
+- Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) and [GuardDuty Malware Protection for EC2](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html) to detect potentially malicious activity in your AWS account
 
 ## Clean Up
 To remove created resources, you will need to
