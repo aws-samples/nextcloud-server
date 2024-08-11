@@ -112,6 +112,11 @@ To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wi
       Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains"
     </IfModule>
 ```
+Verify Apache configuration
+```
+sudo apachetl -t
+```
+
 Reload Apache server
 ```
 sudo systemctl reload apache2
