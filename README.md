@@ -41,6 +41,7 @@ Nextcloud options
 - `phpVersion`: PHP version to install. Uses [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) PPA 
 - `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
 - `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) to associate uploaded file with. Default is `STANDARD`
+- `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/) plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
 
 EBS
 - `volumeSize`: [Amazon EBS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html) volume size
@@ -80,29 +81,23 @@ After which, you can login to your Nextcloud application using `WebUrl` link or 
 The EC2 instance uses a self-signed certificate for HTTPS. You can use [Certbot](https://certbot.eff.org/pages/about) to automatically obtain and install [Let's Encrypt](https://letsencrypt.org/) certificate on your web server.
 
 ### Prerequisites
-Ensure you have a domain name whose DNS entry resolves to your EC2 instance public IP address. If you do not have one, you can [register a new domain](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) and [create a DNS A record](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-creating.html) with [Amazon Route 53](https://aws.amazon.com/route53/).
+Ensure you have a domain name whose DNS entry resolves to your EC2 instance IP address. If you do not have a domain, you can [register a new domain](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) using [Amazon Route 53](https://aws.amazon.com/route53/) and [create a DNS A record](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-creating.html).
 
+### Obtain HTTPS certificate
 
-### Verify DNS record
-From EC2 terminal session, run the following command to determine its public IPv4 address
-```
-curl checkip.amazonaws.com
-```
-
-Assuming your domain name is `nextcloud.example.com`, run the following command to verify IP address associated with it
-```
-dig +short nextcloud.example.com
-```
-
-Ensure that both commands return the same IP address
-
-
-### Using Certbot 
-From terminal, run the below command
+#### Option 1: Using Certbot Apache plugin
+This option requires your domain name to resolve to your EC2 instance *public* IP address, and works with Route 53 and third party DNS hosting providers. From terminal, run the below command
 ```
 sudo certbot --apache
 ```
-Follow instructions to have certbot request and install certificate on your Apache web server. Open a browser to your website to verify that TLS certificate is properly installed. 
+
+#### Option 2: Using Certbot certbot-dns-route53 plugin
+This option requires your DNS to be hosted by Route 53. It supports wildcard certificates and domain names that resolves to private IP addresses. From terminal, run the below command
+```
+sudo certbot --dns-route53 --installer apache
+```
+
+Follow instructions to have Certbot request and install certificate on your web server. Refer to [Certbot site](https://certbot.eff.org/pages/about) for [help](https://certbot.eff.org/pages/help) with this tool.  
 
 ### Configure HSTS
 To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security) headers, edit `*ssl.conf` file in `/etc/apache2/sites-available/` folder and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
@@ -122,7 +117,7 @@ Reload Apache server
 sudo systemctl reload apache2
 ```
 
-## About Nextcloud on AWS
+## Using Nextcloud on AWS
 
 ### Sending email
 Nextcloud supports [email server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html) for password reset and activity notifications. You can configure Nextcloud to use [external SMTP server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-an-smtp-server) or [sendmail](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-sendmail-qmail).
@@ -144,9 +139,9 @@ Refer to Nextcloud [documentation site](https://docs.nextcloud.com/)
 To prevent your CloudFormation stack resources from accidental deletion, you can enable termination protection. Refer to [Protecting a stack from being deleted](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-protect-stacks.html) for instructions.
 
 ### Filter IAM policy source IP
-As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with programmatic access to Nextcloud server S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
+As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with [inline policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) that grants programmatic access to Nextcloud server S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
 
-The created IAM user can be located in CloudFormation stack **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view user permission in IAM console. Edit inline attached policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
+The created IAM user can be located in CloudFormation stack **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view user permission in IAM console. Edit attached inline policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
 ```
 {
