@@ -1617,6 +1617,12 @@ Resources:
             ScheduleExpressionTimezone: !Ref scheduleExpressionTimezone
             Lifecycle:
               DeleteAfterDays: !Ref deleteAfterDays
+      BackupPlanTags:
+        {
+          "StackName": !Sub "${AWS::StackName}",
+          "StackId": !Sub "${AWS::StackId}",
+          "GitHub": "https://github.com/aws-samples/nextcloud-server",
+        }
 
   backupVault:
     Type: AWS::Backup::BackupVault
@@ -1627,6 +1633,12 @@ Resources:
       BackupVaultName: !Sub
         - "${AWS::StackName}-backupVault-${UID}"
         - UID: !Select [5, !Split ["-", !Sub "${AWS::StackId}"]]
+      BackupVaultTags:
+        {
+          "StackName": !Sub "${AWS::StackName}",
+          "StackId": !Sub "${AWS::StackId}",
+          "GitHub": "https://github.com/aws-samples/nextcloud-server",
+        }
 
   backupSelection:
     Type: AWS::Backup::BackupSelection
