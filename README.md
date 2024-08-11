@@ -106,7 +106,7 @@ sudo certbot --apache
 Follow instructions to have certbot request and install certificate on your Apache web server. Open a browser to your website to verify that TLS certificate is properly installed. 
 
 ### Configure HSTS
-To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security), edit `/etc/apache2/sites-available/000-default-le-ssl.conf` and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
+To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security), edit `*ssl.conf` file in `/etc/apache2/sites-available/` folder and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
 
 ```
     <IfModule mod_headers.c>
