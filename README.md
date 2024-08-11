@@ -30,8 +30,8 @@ Network
 - `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Default is `Yes`
 
 Remote Administration
-- `ingressIPv4`: allowed IPv4 internet source prefix to remote administration ports such as SSH, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
-- `ingressIPv6`: allowed IPv6 internet source prefix  to remote administration ports such as SSH. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
+- `ingressIPv4`: allowed IPv4 source prefix to remote administration ports such as SSH, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
+- `ingressIPv6`: allowed IPv6 source prefix  to remote administration ports such as SSH. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
 - `installDCV`: install graphical desktop environment and [NICE DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 - `allowSSHport`: allow inbound SSH from `ingressIPv4` and `ingressIPv6`. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `Yes`
