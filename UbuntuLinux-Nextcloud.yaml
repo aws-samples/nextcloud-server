@@ -51,6 +51,7 @@ Metadata:
           - phpVersion
           - databaseOption
           - s3StorageClass
+          - r53ZoneID
       - Label:
           default: EBS volume
         Parameters:
@@ -90,16 +91,20 @@ Metadata:
         default: "Allowed IPv6 prefix to SSH and NICE DCV(if enabled)"
       allowSSHport:
         default: "Allow SSH from internet"
-      installWebMin:
+      installDCV:
+        default: "Install graphical desktop environment and NICE DCV server"
+      installWebmin:
         default: "Install Webmin web-based system administration tool"
+      r53ZoneID:
+        default: "(optional) Route 53 hosted zone ID to grant access to"
       databaseOption:
         default: "Database server to install"
       phpVersion:
         default: "PHP version to install"
       s3StorageClass:
         default: "S3 Storage Class ( https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare )"
-      installDCV:
-        default: "Install graphical desktop environment and NICE DCV server"
+      r53ZoneID:
+        default: "(optional) Route 53 hosted zone ID to grant access to"
       adminUsername:
         default: "Nextcloud admin username"
       backupResource:
@@ -225,7 +230,10 @@ Parameters:
       - STANDARD
       - STANDARD_IA
     Default: STANDARD
-
+  r53ZoneID:
+    Type: String
+    Description: "https://console.aws.amazon.com/route53/v2/hostedzones"
+    Default: ""
   backupResource:
     Type: String
     AllowedValues:
@@ -604,6 +612,7 @@ Conditions:
 
   useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
   displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
+  hasR53Zone: !Not [!Equals [!Ref r53ZoneID, ""]]
   hasEIC:
     !Not [
       !Equals [
@@ -723,6 +732,28 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub "arn:*:s3:::dcv-license.${AWS::Region}/*"
+        - PolicyName: Route53CertbotAccess
+          PolicyDocument: # Certbot dns_route53 : https://certbot-dns-route53.readthedocs.io/en/stable/
+            Version: "2012-10-17"
+            Statement: # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/specifying-rrset-conditions.html
+              - Effect: Allow
+                Action:
+                  - route53:ListHostedZones
+                  - route53:GetChange
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - route53:ChangeResourceRecordSets
+                Resource: !Sub
+                  - "arn:${AWS::Partition}:route53:::hostedzone/${hostedZone}"
+                  - hostedZone:
+                      !If [hasR53Zone, !Ref r53ZoneID, "EXAMPLE-ZONE-ID"]
+                Condition:
+                  ForAllValues:StringEquals:
+                    "route53:ChangeResourceRecordSetsRecordTypes": ["TXT"]
+                  ForAllValues:StringLike:
+                    "route53:ChangeResourceRecordSetsNormalizedRecordNames":
+                      ["_acme-challenge.*"]
       ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy"
