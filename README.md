@@ -169,7 +169,7 @@ To protect backups (recovery points) from inadvertent or malicious deletions, yo
 
 
 
-## About Nextcloud
+## Using Nextcloud
 
 ### Sending email
 Nextcloud supports [email server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html) for password reset and activity notifications. You can configure Nextcloud to use [external SMTP server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-an-smtp-server) or [sendmail](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-sendmail-qmail).
