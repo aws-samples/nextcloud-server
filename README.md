@@ -44,7 +44,7 @@ Nextcloud options
 - `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
 - `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) to associate uploaded file with. Default is `STANDARD`
 - `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/) plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
-- `enableS3bucketLogging`: enable [S3 server access logging](https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). Default is `Yes`
+- `enableS3bucketLogging`: enable [S3 server access logging](https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). Default is `No`
 
 EBS
 - `volumeSize`: [Amazon EBS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html) volume size
@@ -89,7 +89,7 @@ Ensure you have a domain name whose DNS entry resolves to your EC2 instance IP a
 ### Obtain HTTPS certificate
 
 #### Option 1: Using Certbot Apache plugin
-This option requires your domain name to resolve to your EC2 instance *public* IP address, and works with Route 53 and third party DNS hosting providers. From terminal, run the below command
+This option requires your domain name to resolve to your EC2 instance *public* IP address. From terminal, run the below command
 ```
 sudo certbot --apache
 ```
@@ -125,7 +125,7 @@ sudo systemctl reload apache2
 
 
 ### Filter IAM policy source IP
-As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) that grants programmatic access to the created S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server.
+As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) that grants programmatic access to the created S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server. This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
 
 The created IAM user can be located in CloudFormation console stack **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view user permission in IAM console. Edit attached inline policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
@@ -151,7 +151,7 @@ The created IAM user can be located in CloudFormation console stack **Resources*
   ]
 }
 ```
-This modification ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
+
 
 User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. To use the credentials to mount other S3 buckets in your AWS account as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), modify associated IAM user inline policy `Resource` key and add your desired S3 bucket names. 
 

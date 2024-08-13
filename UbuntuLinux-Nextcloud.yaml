@@ -52,6 +52,7 @@ Metadata:
           - databaseOption
           - s3StorageClass
           - r53ZoneID
+          - enableS3bucketLogging
       - Label:
           default: EBS volume
         Parameters:
@@ -90,21 +91,21 @@ Metadata:
       ingressIPv6:
         default: "Allowed IPv6 prefix to SSH and NICE DCV(if enabled)"
       allowSSHport:
-        default: "Allow SSH from internet"
+        default: "Allow SSH from network"
       installDCV:
         default: "Install graphical desktop environment and NICE DCV server"
       installWebmin:
         default: "Install Webmin web-based system administration tool"
       r53ZoneID:
-        default: "(optional) Route 53 hosted zone ID to grant access to"
+        default: "(optional) Route 53 hosted zone ID access for certbot-dns-route53. Leave blank not to grant"
+      enableS3bucketLogging:
+        default: "Enable Amazon S3 server access logging"
       databaseOption:
         default: "Database server to install"
       phpVersion:
         default: "PHP version to install"
       s3StorageClass:
         default: "S3 Storage Class ( https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare )"
-      r53ZoneID:
-        default: "(optional) Route 53 hosted zone ID to grant access to"
       adminUsername:
         default: "Nextcloud admin username"
       backupResource:
@@ -117,6 +118,14 @@ Metadata:
         default: "Number of days after creation that a recovery point is deleted"
 
 Parameters:
+  ec2Name:
+    Type: String
+    Default: Nextcloud
+  ec2KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "https://console.aws.amazon.com/ec2/#KeyPairs"
+    ConstraintDescription: Specify a key pair
+    AllowedPattern: ".+"
   osVersion:
     Type: String
     Description: https://aws.amazon.com/ec2/graviton/ https://ubuntu.com/aws/pro
@@ -130,27 +139,6 @@ Parameters:
     Type: String
     Description: "https://console.aws.amazon.com/ec2/#InstanceTypes"
     Default: t4g.medium
-
-  ec2Name:
-    Type: String
-    Default: Nextcloud
-  ec2KeyPair:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "https://console.aws.amazon.com/ec2/#KeyPairs"
-    ConstraintDescription: Specify a key pair
-    AllowedPattern: ".+"
-  volumeSize:
-    Type: Number
-    MinValue: 10
-    MaxValue: 16384
-    Default: 60
-  volumeType:
-    Type: String
-    Description: https://aws.amazon.com/ebs/general-purpose/
-    AllowedValues:
-      - "gp3"
-      - "gp2"
-    Default: "gp3"
 
   vpcID:
     Type: AWS::EC2::VPC::Id
@@ -190,7 +178,7 @@ Parameters:
     AllowedValues:
       - "Yes"
       - "No"
-    Default: "Yes"
+    Default: "No"
   installDCV:
     Type: String
     Description: https://aws.amazon.com/hpc/dcv/
@@ -232,8 +220,29 @@ Parameters:
     Default: STANDARD
   r53ZoneID:
     Type: String
-    Description: "https://console.aws.amazon.com/route53/v2/hostedzones"
+    Description: https://console.aws.amazon.com/route53/v2/hostedzones
     Default: ""
+  enableS3bucketLogging:
+    Type: String
+    Description: https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "No"
+
+  volumeSize:
+    Type: Number
+    MinValue: 10
+    MaxValue: 16384
+    Default: 60
+  volumeType:
+    Type: String
+    Description: https://aws.amazon.com/ebs/general-purpose/
+    AllowedValues:
+      - "gp3"
+      - "gp2"
+    Default: "gp3"
+
   backupResource:
     Type: String
     AllowedValues:
@@ -630,6 +639,8 @@ Conditions:
   installDCV: !Equals [!Ref installDCV, "Yes"]
   noDCV: !Not [!Condition installDCV]
   installWebmin: !Equals [!Ref installWebmin, "Yes"]
+  createBackup: !Or [!Condition backupEC2, !Condition backupS3]
+  enableS3bucketLogging: !Equals [!Ref enableS3bucketLogging, "Yes"]
 
   backupEC2:
     !Or [
@@ -641,7 +652,6 @@ Conditions:
       !Equals [!Ref backupResource, "S3"],
       !Equals [!Ref backupResource, "EC2-and-S3"],
     ]
-  createBackup: !Or [!Condition backupEC2, !Condition backupS3]
 
 Mappings:
   EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
@@ -724,36 +734,39 @@ Resources:
             Action: ["sts:AssumeRole"]
       Path: /
       Policies:
-        - PolicyName: dcvLicensing
-          PolicyDocument: # https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-license.html
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub "arn:*:s3:::dcv-license.${AWS::Region}/*"
-        - PolicyName: Route53CertbotAccess
-          PolicyDocument: # Certbot dns_route53 : https://certbot-dns-route53.readthedocs.io/en/stable/
-            Version: "2012-10-17"
-            Statement: # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/specifying-rrset-conditions.html
-              - Effect: Allow
-                Action:
-                  - route53:ListHostedZones
-                  - route53:GetChange
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - route53:ChangeResourceRecordSets
-                Resource: !Sub
-                  - "arn:${AWS::Partition}:route53:::hostedzone/${hostedZone}"
-                  - hostedZone:
-                      !If [hasR53Zone, !Ref r53ZoneID, "EXAMPLE-ZONE-ID"]
-                Condition:
-                  ForAllValues:StringEquals:
-                    "route53:ChangeResourceRecordSetsRecordTypes": ["TXT"]
-                  ForAllValues:StringLike:
-                    "route53:ChangeResourceRecordSetsNormalizedRecordNames":
-                      ["_acme-challenge.*"]
+        - !If
+          - installDCV
+          - PolicyName: dcvLicensing
+            PolicyDocument: # https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-license.html
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:GetObject
+                  Resource: !Sub "arn:*:s3:::dcv-license.${AWS::Region}/*"
+          - !Ref AWS::NoValue
+        - !If
+          - hasR53Zone
+          - PolicyName: Route53CertbotAccess
+            PolicyDocument: # Certbot dns_route53 : https://certbot-dns-route53.readthedocs.io/en/stable/
+              Version: "2012-10-17"
+              Statement: # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/specifying-rrset-conditions.html
+                - Effect: Allow
+                  Action:
+                    - route53:ListHostedZones
+                    - route53:GetChange
+                  Resource: "*"
+                - Effect: Allow
+                  Action:
+                    - route53:ChangeResourceRecordSets
+                  Resource: !Sub "arn:${AWS::Partition}:route53:::hostedzone/${r53ZoneID}"
+                  Condition:
+                    ForAllValues:StringEquals:
+                      "route53:ChangeResourceRecordSetsRecordTypes": ["TXT"]
+                    ForAllValues:StringLike:
+                      "route53:ChangeResourceRecordSetsNormalizedRecordNames":
+                        ["_acme-challenge.*"]
+          - !Ref AWS::NoValue
       ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy"
@@ -775,8 +788,8 @@ Resources:
   securityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow inbound SSH, HTTP, HTTPS
       VpcId: !Ref vpcID
+      GroupDescription: Allow inbound HTTP, HTTPS
       SecurityGroupIngress:
         - !If
           - installWebmin
@@ -896,20 +909,6 @@ Resources:
   iamUser:
     Type: AWS::IAM::User
     Properties:
-      Policies:
-        - PolicyName: S3BucketAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:*
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}"
-                  - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*"
-                Condition:
-                  IpAddress:
-                    aws:SourceIp: 0.0.0.0/0
       Tags:
         - Key: StackName
           Value: !Ref AWS::StackName
@@ -917,6 +916,41 @@ Resources:
           Value: !Ref AWS::StackId
         - Key: GitHub
           Value: https://github.com/aws-samples/nextcloud-server
+
+  iamGroup:
+    Type: AWS::IAM::Group
+    Properties:
+
+  iamGroupPolicy:
+    Type: AWS::IAM::GroupPolicy
+    Properties:
+      GroupName: !Ref iamGroup
+      PolicyName: !Sub
+        - "${AWS::StackName}-iamGroupPolicy-${UID}"
+        - UID:
+            !Select [
+              3,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}"
+              - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*"
+            Condition:
+              IpAddress:
+                aws:SourceIp: 0.0.0.0/0
+
+  iamUserToGroup:
+    Type: AWS::IAM::UserToGroupAddition
+    Properties:
+      GroupName: !Ref iamGroup
+      Users:
+        - !Ref iamUser
 
   userAccessKey:
     Type: AWS::IAM::AccessKey
@@ -936,6 +970,69 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName:
+          !If [enableS3bucketLogging, !Ref logBucket, !Ref AWS::NoValue]
+        LogFilePrefix:
+          !If [
+            enableS3bucketLogging,
+            !Sub "${AWS::StackName}/",
+            !Ref AWS::NoValue,
+          ]
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: StackId
+          Value: !Ref AWS::StackId
+        - Key: GitHub
+          Value: https://github.com/aws-samples/nextcloud-server
+
+  s3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref s3Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: Deny
+            Action:
+              - s3:*
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+            Principal: "*"
+            Resource: !Sub "${s3Bucket.Arn}/*"
+
+  logBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: enableS3bucketLogging
+    Properties:
+      Bucket: !Ref logBucket
+      PolicyDocument: # https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${logBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  logBucket:
+    Type: AWS::S3::Bucket
+    Condition: enableS3bucketLogging
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AWS::NoValue
+        LogFilePrefix: !Ref AWS::NoValue
       Tags:
         - Key: StackName
           Value: !Ref AWS::StackName
@@ -980,7 +1077,6 @@ Resources:
                 sudo apt-get install -y ./nice-dcv-server_*.deb
                 sudo apt-get install -y ./nice-dcv-web-viewer_*.deb
                 sudo apt-get install -y ./nice-xdcv_*.deb
-                sudo apt-get install -y ./nice-dcv-gltest_*.deb
                 sudo systemctl restart dcvserver
               mode: "000755"
               owner: "ubuntu"
@@ -1158,7 +1254,6 @@ Resources:
                 apt-get install -q -y ./nice-dcv-web-viewer_*.deb
                 usermod -aG video dcv
                 apt-get install -q -y ./nice-xdcv_*.deb
-                apt-get install -q -y ./nice-dcv-gltest_*.deb
 
                 # Printer redirection: https://docs.aws.amazon.com/dcv/latest/adminguide/manage-printer.html
                 apt-get install -q -y cups
@@ -1493,6 +1588,8 @@ Resources:
       KeyName: !Ref ec2KeyPair
       SubnetId: !Ref subnetID
       Monitoring: true
+      DisableApiTermination: true
+      EbsOptimized: true
       SecurityGroupIds:
         - !Ref securityGroup
       BlockDeviceMappings:
@@ -1501,6 +1598,7 @@ Resources:
             VolumeType: !Ref volumeType
             VolumeSize: !Ref volumeSize
             DeleteOnTermination: true
+            Encrypted: true
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
