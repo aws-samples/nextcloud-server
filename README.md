@@ -1,5 +1,6 @@
 # nextcloud-server
-[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running Nextcloud file synchronization and sharing server, with [Amazon S3](https://aws.amazon.com/s3/) as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection.
+[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running Nextcloud file synchronization and sharing server, with new [Amazon S3](https://aws.amazon.com/s3/) bucket as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection. Includes option to mount existing S3 bucket.
+
 
 ## Notice
 Although this repository is released under the [MIT-0](LICENSE) license, its CloudFormation template uses features from [Nextcloud](https://github.com/nextcloud/server) project. Nextcloud project's licensing includes the [AGPL](https://github.com/nextcloud/server?tab=AGPL-3.0-1-ov-file) license.
@@ -38,20 +39,25 @@ Remote Administration
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 - `allowSSHport`: allow inbound SSH from `ingressIPv4` and `ingressIPv6`. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
 
-Nextcloud options
+Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
 - `phpVersion`: PHP version to install. Uses [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) PPA 
 - `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
-- `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) to associate uploaded file with. Default is `STANDARD`
 - `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/) plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
+
+S3
+- `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) for primary storage to associate uploaded file with. Default is `STANDARD`
 - `enableS3bucketLogging`: enable [S3 server access logging](https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). Default is `No`
+- `externalS3Bucket` (optional): option to mount existing S3 bucket within Nextcloud as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html). Specify bucket name in your account
+- `externalS3BucketRegion`: [AWS Region](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.RegionsAndAvailabilityZones.html#Concepts.RegionsAndAvailabilityZones.Regions) where `externalS3Bucket` is located
+
 
 EBS
 - `volumeSize`: [Amazon EBS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html) volume size
 - `volumeType`: [EBS General Purpose Volume](https://aws.amazon.com/ebs/general-purpose/) type
 
 AWS Backup
-- `backupResource`: backup EC2 instance, S3 bucket, both or none. Default is `EC2-and-S3` 
+- `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. Default is `EC2-and-S3` 
 - `scheduleExpression`: CRON expression specifying when AWS Backup initiates a backup job. Default is `cron(0 1 ? * * *)`
 - `scheduleExpressionTimezone`: timezone in which the schedule expression is set. Default is `Etc/UTC`
 - `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `7` days
@@ -153,7 +159,7 @@ The created IAM user can be located in CloudFormation console stack **Resources*
 ```
 
 
-User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. To use the credentials to mount other S3 buckets in your AWS account as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), modify associated IAM user inline policy `Resource` key and add your desired S3 bucket names. 
+User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. To use the credentials to mount other S3 buckets in your AWS account as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), modify associated IAM policy `Resource` key and add your desired S3 bucket names. 
 
 
 
@@ -176,12 +182,12 @@ Nextcloud supports [email server](https://docs.nextcloud.com/server/latest/admin
 
 When configuring external SMTP server, use 465, 587 or any port number that your server supports that is not 25. Amazon EC2 [restricts](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-resource-limits.html#port-25-throttle) email sending using port 25 on all instances by default. You can request that this restriction be removed. Refer to [How do I remove the restriction on port 25 from my Amazon EC2 instance or Lambda function?](https://repost.aws/knowledge-center/ec2-port-25-throttle) for more information.
 
-### Mounting another S3 bucket
-Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount external storage services including existing S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html) for details.
+### Mounting more S3 buckets
+Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount other external storage services including S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html) for details.
 
 
 ### Documentation
-Refer to Nextcloud [documentation site](https://docs.nextcloud.com/)
+Refer to Nextcloud [documentation site](https://docs.nextcloud.com/) for usage and other features.
 
 
 
@@ -198,7 +204,7 @@ To futher secure your EC2 instance, you may want to
 
 ## Clean Up
 To remove created resources, you will need to
-- [Empty](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) created S3 bucket
+- [Empty](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) created S3 bucket(s)
 - [Delete](https://docs.aws.amazon.com/aws-backup/latest/devguide/deleting-backups.html) recovery points in created backup vault
 - [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection
 - [Delete](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-delete-stack.html) CloudFormation stack

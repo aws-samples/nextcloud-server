@@ -45,14 +45,19 @@ Metadata:
           - installDCV
           - installWebmin
       - Label:
-          default: Nextcloud options
+          default: Nextcloud
         Parameters:
           - adminUsername
           - phpVersion
           - databaseOption
-          - s3StorageClass
           - r53ZoneID
-          - enableS3bucketLogging
+      - Label:
+          default: S3
+        Parameters:
+          - s3StorageClass
+          - enableS3BucketLogging
+          - externalS3Bucket
+          - externalS3BucketRegion
       - Label:
           default: EBS volume
         Parameters:
@@ -74,10 +79,12 @@ Metadata:
         default: "Instance name"
       ec2KeyPair:
         default: "Keypair name"
+
       volumeSize:
         default: "Volume size (GiB)"
       volumeType:
         default: "Volume type"
+
       vpcID:
         default: "VPC with internet connectivity"
       subnetID:
@@ -86,28 +93,36 @@ Metadata:
         default: "EC2 in public subnet with public IP assigned?"
       assignStaticIP:
         default: "[Elastic IP] Assign static public internet IPv4 address"
+
       ingressIPv4:
-        default: "Allowed IPv4 prefix to SSH and NICE DCV(if enabled)"
+        default: "Allowed IPv4 prefix"
       ingressIPv6:
-        default: "Allowed IPv6 prefix to SSH and NICE DCV(if enabled)"
+        default: "Allowed IPv6 prefix"
       allowSSHport:
         default: "Allow SSH from network"
       installDCV:
         default: "Install graphical desktop environment and NICE DCV server"
       installWebmin:
         default: "Install Webmin web-based system administration tool"
-      r53ZoneID:
-        default: "(optional) Route 53 hosted zone ID access for certbot-dns-route53. Leave blank not to grant"
-      enableS3bucketLogging:
-        default: "Enable Amazon S3 server access logging"
-      databaseOption:
-        default: "Database server to install"
-      phpVersion:
-        default: "PHP version to install"
-      s3StorageClass:
-        default: "S3 Storage Class ( https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare )"
+
       adminUsername:
         default: "Nextcloud admin username"
+      phpVersion:
+        default: "PHP version to install"
+      r53ZoneID:
+        default: "(Optional) Route 53 hosted zone ID for certbot-dns-route53 access. Leave blank not to grant"
+      databaseOption:
+        default: "Database server to install"
+
+      s3StorageClass:
+        default: "Storage class for primary storage ( https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare )"
+      enableS3BucketLogging:
+        default: "Enable primary storage S3 server access logging"
+      externalS3Bucket:
+        default: "(Optional) Existing S3 bucket to mount as external storage. Leave blank for none"
+      externalS3BucketRegion:
+        default: "Region where external storage S3 bucket is located"
+
       backupResource:
         default: "Resources to backup"
       scheduleExpression:
@@ -209,6 +224,11 @@ Parameters:
       - "MariaDB"
       - "MySQL"
     Default: "MariaDB"
+  r53ZoneID:
+    Type: String
+    Description: https://console.aws.amazon.com/route53/v2/hostedzones
+    Default: ""
+
   s3StorageClass:
     Type: String
     AllowedValues:
@@ -218,17 +238,54 @@ Parameters:
       - STANDARD
       - STANDARD_IA
     Default: STANDARD
-  r53ZoneID:
-    Type: String
-    Description: https://console.aws.amazon.com/route53/v2/hostedzones
-    Default: ""
-  enableS3bucketLogging:
+  enableS3BucketLogging:
     Type: String
     Description: https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
     AllowedValues:
       - "Yes"
       - "No"
     Default: "No"
+  externalS3Bucket:
+    Type: String
+    Description: https://console.aws.amazon.com/s3/home
+    Default: ""
+  externalS3BucketRegion:
+    Type: String
+    AllowedValues:
+      - af-south-1
+      - ap-east-1
+      - ap-northeast-1
+      - ap-northeast-2
+      - ap-northeast-3
+      - ap-south-1
+      - ap-south-2
+      - ap-southeast-1
+      - ap-southeast-2
+      - ap-southeast-3
+      - ap-southeast-4
+      - ca-central-1
+      - ca-west-1
+      - cn-north-1
+      - cn-northwest-1
+      - eu-central-1
+      - eu-central-2
+      - eu-north-1
+      - eu-south-1
+      - eu-south-2
+      - eu-west-1
+      - eu-west-2
+      - eu-west-3
+      - il-central-1
+      - me-central-1
+      - me-south-1
+      - sa-east-1
+      - us-east-1
+      - us-east-2
+      - us-gov-east-1
+      - us-gov-west-1
+      - us-west-1
+      - us-west-2
+    Default: us-east-1
 
   volumeSize:
     Type: Number
@@ -247,8 +304,10 @@ Parameters:
     Type: String
     AllowedValues:
       - EC2
-      - EC2-and-S3
       - S3
+      - ExternalStorage
+      - EC2-and-S3
+      - All
       - none
     Default: "EC2-and-S3"
   scheduleExpression:
@@ -619,9 +678,6 @@ Conditions:
   useUbuntu2204arm64: !Equals [!Ref osVersion, "Ubuntu 22.04 (arm64)"]
   useUbuntuPro2204x86: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (x86_64)"]
 
-  useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
-  displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
-  hasR53Zone: !Not [!Equals [!Ref r53ZoneID, ""]]
   hasEIC:
     !Not [
       !Equals [
@@ -635,23 +691,44 @@ Conditions:
       ],
     ]
   createEICsg: !And [!Condition hasEIC, !Condition displayPublicIP]
-  createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
+
+  useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
+  displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
+
   installDCV: !Equals [!Ref installDCV, "Yes"]
   noDCV: !Not [!Condition installDCV]
   installWebmin: !Equals [!Ref installWebmin, "Yes"]
-  createBackup: !Or [!Condition backupEC2, !Condition backupS3]
-  enableS3bucketLogging: !Equals [!Ref enableS3bucketLogging, "Yes"]
+  hasR53Zone: !Not [!Equals [!Ref r53ZoneID, ""]]
+  createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
+
+  enableS3BucketLogging: !Equals [!Ref enableS3BucketLogging, "Yes"]
+  externalS3Bucket: !Not [!Equals [!Ref externalS3Bucket, ""]]
 
   backupEC2:
     !Or [
       !Equals [!Ref backupResource, "EC2"],
-      !Equals [!Ref backupResource, "EC2-and-S3"],
+      !Or [
+        !Equals [!Ref backupResource, "EC2-and-S3"],
+        !Equals [!Ref backupResource, "All"],
+      ],
     ]
   backupS3:
     !Or [
       !Equals [!Ref backupResource, "S3"],
-      !Equals [!Ref backupResource, "EC2-and-S3"],
+      !Or [
+        !Equals [!Ref backupResource, "EC2-and-S3"],
+        !Equals [!Ref backupResource, "All"],
+      ],
     ]
+  backupExternalStorage:
+    !And [
+      !Condition externalS3Bucket,
+      !Or [
+        !Equals [!Ref backupResource, "ExternalStorage"],
+        !Equals [!Ref backupResource, "All"],
+      ],
+    ]
+  createBackup: !Not [!Equals [!Ref backupResource, "none"]]
 
 Mappings:
   EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
@@ -921,12 +998,12 @@ Resources:
     Type: AWS::IAM::Group
     Properties:
 
-  iamGroupPolicy:
+  iamS3PrimaryStoragePolicy:
     Type: AWS::IAM::GroupPolicy
     Properties:
       GroupName: !Ref iamGroup
       PolicyName: !Sub
-        - "${AWS::StackName}-iamGroupPolicy-${UID}"
+        - "${AWS::StackName}-iamS3PrimaryStoragePolicy-${UID}"
         - UID:
             !Select [
               3,
@@ -941,6 +1018,36 @@ Resources:
             Resource:
               - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}"
               - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*"
+            Condition:
+              IpAddress:
+                aws:SourceIp: 0.0.0.0/0
+
+  iamS3ExternalStoragePolicy:
+    Type: AWS::IAM::GroupPolicy
+    Condition: externalS3Bucket
+    Properties:
+      GroupName: !Ref iamGroup
+      PolicyName: !Sub
+        - "${AWS::StackName}-iamS3ExternalStorage-${UID}"
+        - UID:
+            !Select [
+              3,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectAttributes
+              - s3:ListBucket
+              - s3:GetBucketVersioning
+              - s3:DeleteObject
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}"
+              - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}/*"
             Condition:
               IpAddress:
                 aws:SourceIp: 0.0.0.0/0
@@ -972,10 +1079,10 @@ Resources:
         Status: Enabled
       LoggingConfiguration:
         DestinationBucketName:
-          !If [enableS3bucketLogging, !Ref logBucket, !Ref AWS::NoValue]
+          !If [enableS3BucketLogging, !Ref logBucket, !Ref AWS::NoValue]
         LogFilePrefix:
           !If [
-            enableS3bucketLogging,
+            enableS3BucketLogging,
             !Sub "${AWS::StackName}/",
             !Ref AWS::NoValue,
           ]
@@ -1004,7 +1111,7 @@ Resources:
 
   logBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: enableS3bucketLogging
+    Condition: enableS3BucketLogging
     Properties:
       Bucket: !Ref logBucket
       PolicyDocument: # https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
@@ -1020,7 +1127,7 @@ Resources:
 
   logBucket:
     Type: AWS::S3::Bucket
-    Condition: enableS3bucketLogging
+    Condition: enableS3BucketLogging
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -1480,6 +1587,14 @@ Resources:
                 # Enable apps
                 sudo -u www-data php occ app:enable files_external
 
+                 # Mount S3 as external storage?
+                export S3Bucket="${externalS3Bucket}"
+                if [ -n "$S3Bucket" ]; then
+                  sudo -u www-data php /var/www/html/occ files_external:create \
+                    "AmazonS3-${externalS3Bucket}"  "amazons3" "amazons3::accesskey" -c key="${userAccessKey}"  \
+                    -c secret="${userAccessKey.SecretAccessKey}" -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}"
+                fi
+
                 # sendmail
                 apt-get install -q -y sendmail
 
@@ -1489,7 +1604,7 @@ Resources:
                 # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html#cron-jobs
                 crontab -u www-data /root/nextcloud/crontab-www-data
 
-              mode: "000755"
+              mode: "000740"
               owner: "root"
               group: "root"
             "/etc/apache2/conf-available/nextcloud.conf": # https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html#apache-configuration-label
@@ -1540,7 +1655,7 @@ Resources:
                   'mysql.utf8mb4' => true,
                   'htaccess.RewriteBase' => '/',
                   'defaultapp' => 'files',
-                  'skeletondirectory' => '/var/www/html/core/skeleton', # set to '' to not copy any skeleton files                  
+                  'skeletondirectory' => '', # set to '/var/www/html/core/skeleton' to include skeleton files               
                   'objectstore' => array(
                     'class' => 'OC\\Files\\ObjectStore\\S3',
                     'arguments' => array(
@@ -1555,7 +1670,7 @@ Resources:
                     ),
                   ),
                 );
-              mode: "000644"
+              mode: "000640"
               owner: "root"
               group: "root"
             "/root/nextcloud/crontab-www-data":
@@ -1784,6 +1899,10 @@ Resources:
           - !If
             - backupEC2
             - !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${ec2Instance}"
+            - !Ref AWS::NoValue
+          - !If
+            - backupExternalStorage
+            - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}"
             - !Ref AWS::NoValue
         SelectionName: !Sub
           - "${AWS::StackName}-backupSelection-${UID}"
