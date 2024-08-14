@@ -1,5 +1,5 @@
 # nextcloud-server
-[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running Nextcloud file synchronization and sharing server, with new [Amazon S3](https://aws.amazon.com/s3/) bucket as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection. Includes option to mount existing S3 bucket.
+[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running [Nextcloud](https://nextcloud.com/) file synchronization and sharing server, with a new [Amazon S3](https://aws.amazon.com/s3/) bucket as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection. Includes option to mount existing S3 bucket.
 
 
 ## Notice
@@ -182,12 +182,17 @@ Nextcloud supports [email server](https://docs.nextcloud.com/server/latest/admin
 
 When configuring external SMTP server, use 465, 587 or any port number that your server supports that is not 25. Amazon EC2 [restricts](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-resource-limits.html#port-25-throttle) email sending using port 25 on all instances by default. You can request that this restriction be removed. Refer to [How do I remove the restriction on port 25 from my Amazon EC2 instance or Lambda function?](https://repost.aws/knowledge-center/ec2-port-25-throttle) for more information.
 
-### Mounting more S3 buckets
+### Mounting more S3 buckets as external storage
 Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount other external storage services including S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html) for details.
 
 
-### Documentation
-Refer to Nextcloud [documentation site](https://docs.nextcloud.com/) for usage and other features.
+### Further information and download links
+Nextcloud is mentioned by the following blog posts
+- [Scale your Nextcloud with Storage on Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/blogs/opensource/scale-your-nextcloud-with-storage-on-amazon-simple-storage-service-amazon-s3/)
+- [Advanced Nextcloud Workflows with Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/blogs/opensource/advanced-nextcloud-workflows-with-storage-on-amazon-simple-storage-service-amazon-s3-2/)
+
+The CloudFormation template focuses on cloud storage and file sharing features of [Nextcloud Files](https://nextcloud.com/files/). Administration and User manuals are available from Nextcloud [documentation site](https://docs.nextcloud.com/). Desktop and mobile applications download links are available from [Nextcloud Install](https://nextcloud.com/install/#install-clients) page
+
 
 
 
