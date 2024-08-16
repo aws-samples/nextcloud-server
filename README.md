@@ -24,7 +24,7 @@ EC2 instance
 - `ec2Name`: EC2 instance name 
 - `ec2KeyPair`: [EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) name. [Create key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html) if necessary
 - `osVersion`: operating system version and processor architecture. Default architecture is [Graviton](https://aws.amazon.com/ec2/graviton/) arm64
-- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `t4g.medium` [burstable instance type](https://aws.amazon.com/ec2/instance-types/t4/). For better performance, consider [M6g](https://aws.amazon.com/ec2/instance-types/m6g/) or [M7g](https://aws.amazon.com/ec2/instance-types/m7g/) instance
+- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `t4g.medium` [burstable instance type](https://aws.amazon.com/ec2/instance-types/t4/). For better performance, consider [M7g](https://aws.amazon.com/ec2/instance-types/m7g/) instance
 
 Network
 - `vpcID`: [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) with internet connectivity. Select [default VPC](https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html) if unsure
@@ -103,7 +103,7 @@ sudo certbot --apache
 ```
 
 #### Option 2: Using Certbot certbot-dns-route53 plugin
-This option requires your DNS to be hosted by Route 53. It supports wildcard certificates and domain names that resolves to private IP addresses. From terminal, run the below command
+This option requires your DNS to be hosted by Route 53, and `r53ZoneID` is configured. It supports wildcard certificates and domain names that resolves to private IP addresses. From terminal, run the below command
 ```
 sudo certbot --dns-route53 --installer apache
 ```
@@ -166,7 +166,7 @@ User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentia
 
 
 ### S3 primary storage
-S3 is used to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) has [performance benefits](
+Amazon S3 is used to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) has [performance benefits](
 https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html). 
 
 Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
@@ -199,7 +199,7 @@ The CloudFormation template focuses on cloud storage and file sharing features o
 
 
 
-## Secure EC2 instance
+## Securing EC2 instance
 
 To futher secure your EC2 instance, you may want to
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
