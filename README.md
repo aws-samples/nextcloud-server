@@ -33,11 +33,13 @@ Network
 - `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Default is `Yes`
 
 Remote Administration
-- `ingressIPv4`: allowed IPv4 source prefix to remote administration services such as SSH, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
-- `ingressIPv6`: allowed IPv6 source prefix  to remote administration services such as SSH. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
+- `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
+- `ingressIPv6`: allowed IPv6 source prefix to remote administration services. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
 - `installDCV`: install graphical desktop environment and [NICE DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
-- `allowSSHport`: allow inbound SSH from `ingressIPv4` and `ingressIPv6`. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
+- `allowSSHport`: allow inbound SSH. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
+
+SSH, NICE DCV and Webmin inbound access from internet are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes. 
 
 Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
@@ -164,7 +166,7 @@ User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentia
 
 
 ### S3 primary storage
-S3 is used to to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) has [performance benefits](
+S3 is used to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) has [performance benefits](
 https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html). 
 
 Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
@@ -203,7 +205,7 @@ To futher secure your EC2 instance, you may want to
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
 - Disable SSH access from public internet (`allowSSHport`). Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access. If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
 - Remove NICE DCV web browser client package by running the command `sudo apt remove -y nice-dcv-web-viewer`. Connect using native Windows, MacOS or Linux [client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
-- Deploy EC2 instance in a private subnet, and setup [Application Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html) with [AWS WAF](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#load-balancer-waf) to filter incoming traffic
+- Deploy EC2 instance in a private subnet. Use [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) and [AWS WAF](https://aws.amazon.com/waf/) to [protect your EC2 instance](https://repost.aws/knowledge-center/waf-protect-ec2-instance). You can use [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) to [request a public HTTPS certificate](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and [associate it](https://repost.aws/knowledge-center/associate-acm-certificate-alb-nlb) with your Application Load Balancer
 - Enable [Amazon Inspector](https://docs.aws.amazon.com/inspector/latest/user/what-is-inspector.html) to automatically scan EC2 instance for software vulnerabilities and unintended network exposure
 - Enable [Amazon GuardDuty](https://docs.aws.amazon.com/guardduty/latest/ug/what-is-guardduty.html) and [GuardDuty Malware Protection for EC2](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html) to detect potentially malicious activity in your AWS account
 
