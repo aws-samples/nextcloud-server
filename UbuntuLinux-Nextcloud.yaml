@@ -1443,6 +1443,13 @@ Resources:
                 sed -i 's/upload_max_filesize =.*/upload_max_filesize = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
                 sed -i 's/post_max_size =.*/post_max_size = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
 
+                # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html
+                sed -i "s/^max_input_time/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
+                sed -i "/^;max_input_time/a max_input_time=3600" /etc/php/$PHP_VERSION/fpm/php.ini                
+
+                sed -i "s/^max_execution_time/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
+                sed -i "/^;max_execution_time/a max_execution_time=3600" /etc/php/$PHP_VERSION/fpm/php.ini   
+
                 # https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#jit
                 sed -i "s/^opcache.jit=/;&/" /etc/php/$PHP_VERSION/mods-available/opcache.ini
                 sed -i "/^;opcache.jit=/a opcache.jit=1255\nopcache.jit_buffer_size=128M\nopcache.interned_strings_buffer=16\nopcache.max_accelerated_files=10000\nopcache.memory_consumption=128\nopcache.save_comments=1\nopcache.revalidate_freq=1" /etc/php/$PHP_VERSION/mods-available/opcache.ini
@@ -1575,8 +1582,11 @@ Resources:
                 echo "alias nextcloud.occ='sudo -u www-data php /var/www/html/occ'" >> ~/.bashrc
                 echo "alias nextcloud.occ='sudo -u www-data php /var/www/html/occ'" >> /home/ubuntu/.bashrc
 
-                # Allow ALL as trusted_domains
+                # Allow ALL as trusted_domains: https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/config_sample_php_parameters.html#trusted-domains
                 sudo -u www-data php occ config:system:set "trusted_domains" 1 --value=*
+
+                # phpinfo troubleshooting: https://docs.nextcloud.com/server/stable/admin_manual/issues/general_troubleshooting.html
+                sudo -u www-data php occ config:app:set --value=yes serverinfo phpinfo
 
                 # Disable default apps
                 sudo -u www-data php occ app:disable dashboard
@@ -1992,3 +2002,7 @@ Outputs:
         !Sub "https://${ec2Instance.PublicIp}:10000",
         !Sub "https://${ec2Instance.PrivateIp}:10000",
       ]
+
+  NextcloudLogUrl:
+    Description: Cloudwatch log for nextcloud.log
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/nextcloud.log/log-events/${ec2Instance}"
