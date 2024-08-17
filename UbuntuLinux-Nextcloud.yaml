@@ -1028,7 +1028,7 @@ Resources:
     Properties:
       GroupName: !Ref iamGroup
       PolicyName: !Sub
-        - "${AWS::StackName}-iamS3ExternalStorage-${UID}"
+        - "${AWS::StackName}-iamS3ExternalStoragePolicy-${UID}"
         - UID:
             !Select [
               3,
@@ -1411,7 +1411,7 @@ Resources:
                 add-apt-repository -y ppa:ondrej/apache2
 
                 # PHP and Apache install
-                apt-get install -q -y ${phpVersion} ${phpVersion}-{common,fpm,opcache,apcu} apache2 libapache2-mod-fcgid
+                apt-get install -q -y ${phpVersion} ${phpVersion}-{common,fpm,opcache,apcu,cgi} apache2 libapache2-mod-fcgid
                 # https://docs.nextcloud.com/server/latest/admin_manual/installation/php_configuration.html
                 apt-get install -q -y ${phpVersion}-{xml,xmlrpc,xsl,soap,ldap,zip,bz2,intl,curl,mbstring,bcmath,imagick,gd}
                 apt-get install -q -y ${phpVersion}-{memcached,redis,mysql}
@@ -1740,6 +1740,7 @@ Resources:
           apt-get clean all
           apt-get update -q
           apt-get install -q -y wget tmux unzip tar curl sed
+          apt-get install -q -y amazon-ec2-utils
 
           # CfN scripts: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
           apt-get install -q -y python3 python3-pip python3-setuptools python3-docutils python3-daemon
