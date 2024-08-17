@@ -45,7 +45,7 @@ Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
 - `phpVersion`: PHP version to install. Uses [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) PPA 
 - `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
-- `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/) plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
+- `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](#option-2-using-certbot-certbot-dns-route53-plugin) plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
 
 S3
 - `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) for primary storage to associate uploaded file with. Default is `STANDARD`
@@ -104,7 +104,7 @@ sudo certbot --apache
 ```
 
 #### Option 2: Using Certbot certbot-dns-route53 plugin
-This option requires your DNS to be hosted by Route 53, and `r53ZoneID` is configured. It supports wildcard certificates and domain names that resolves to private IP addresses. From terminal, run the below command
+The [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/en/stable/) option requires your DNS to be hosted by Route 53. It supports wildcard certificates and domain names that resolve to private IP addresses. Ensure that Route 53 zone access is granted by specifying `r53ZoneID` value.  From terminal, run the below command
 ```
 sudo certbot --dns-route53 --installer apache
 ```
