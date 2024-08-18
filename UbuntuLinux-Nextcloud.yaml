@@ -1077,6 +1077,12 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: Delete-Incomplete-Multipart-Uploads
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+            Status: Enabled
       LoggingConfiguration:
         DestinationBucketName:
           !If [enableS3BucketLogging, !Ref logBucket, !Ref AWS::NoValue]
@@ -1415,7 +1421,7 @@ Resources:
                 # https://docs.nextcloud.com/server/latest/admin_manual/installation/php_configuration.html
                 apt-get install -q -y ${phpVersion}-{xml,xmlrpc,xsl,soap,ldap,zip,bz2,intl,curl,mbstring,bcmath,imagick,gd}
                 apt-get install -q -y ${phpVersion}-{memcached,redis,mysql}
-                apt-get install -q -y ${phpVersion}-{igbinary,msgpack,zstd,lz4}
+                apt-get install -q -y ${phpVersion}-{igbinary,msgpack,zstd,lz4,bz2}
                 apt-get install -q -y ${phpVersion}-{smbclient,gmp}
 
                 # Redis for caching and session state
@@ -1605,6 +1611,11 @@ Resources:
                     -c secret="${userAccessKey.SecretAccessKey}" -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}"
                 fi
 
+                # Fix large file upload failure for S3 external storage: https://github.com/nextcloud/server/issues/24390
+                # https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
+                # However, this will create "Some files have not passed the integrity check." in Administration, Overview page
+                # sed -i "s/524288000;/104857600;/g" /var/www/html/lib/private/Files/ObjectStore/S3ConnectionTrait.php
+
                 # sendmail
                 apt-get install -q -y sendmail
 
@@ -1675,6 +1686,7 @@ Resources:
                       'key' => '${userAccessKey}',
                       'secret' => '${userAccessKey.SecretAccessKey}',
                       'storageClass' => '${s3StorageClass}',
+                      'uploadPartSize' => '104857600',
                       'verify_bucket_exists' => false,
                       'use_ssl' => true
                     ),
@@ -1780,7 +1792,7 @@ Resources:
           apt-get upgrade -q -y
           apt-get autoremove -q -y
 
-          # Install PHP, Apache, MySQL/MariaDB and Nextcloud
+          # Nextcloud
           $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c nextcloud_install
 
           # CloudWatch agent: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-on-EC2-Instance.html
@@ -1793,6 +1805,7 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
           usermod -a -G www-data cwagent
           systemctl enable --now amazon-cloudwatch-agent
+
           # Webmin
           export webmin="${installWebmin}"
           case $webmin in
