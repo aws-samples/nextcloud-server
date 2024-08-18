@@ -702,6 +702,7 @@ Conditions:
   createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
 
   enableS3BucketLogging: !Equals [!Ref enableS3BucketLogging, "Yes"]
+  noS3BucketLogging: !Not [!Condition enableS3BucketLogging]
   externalS3Bucket: !Not [!Equals [!Ref externalS3Bucket, ""]]
 
   backupEC2:
@@ -1016,8 +1017,16 @@ Resources:
             Action:
               - s3:*
             Resource:
-              - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}"
-              - !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*"
+              - !If [
+                  noS3BucketLogging,
+                  !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}",
+                  !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}",
+                ]
+              - !If [
+                  noS3BucketLogging,
+                  !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*",
+                  !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}/*",
+                ]
             Condition:
               IpAddress:
                 aws:SourceIp: 0.0.0.0/0
@@ -1066,6 +1075,35 @@ Resources:
 
   s3Bucket:
     Type: AWS::S3::Bucket
+    Condition: noS3BucketLogging
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: Delete-Incomplete-Multipart-Uploads
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+            Status: Enabled
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: StackId
+          Value: !Ref AWS::StackId
+        - Key: GitHub
+          Value: https://github.com/aws-samples/nextcloud-server
+
+  s3BucketWithLogging:
+    Type: AWS::S3::Bucket
+    Condition: enableS3BucketLogging
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -1084,14 +1122,8 @@ Resources:
               DaysAfterInitiation: 7
             Status: Enabled
       LoggingConfiguration:
-        DestinationBucketName:
-          !If [enableS3BucketLogging, !Ref logBucket, !Ref AWS::NoValue]
-        LogFilePrefix:
-          !If [
-            enableS3BucketLogging,
-            !Sub "${AWS::StackName}/",
-            !Ref AWS::NoValue,
-          ]
+        DestinationBucketName: !Ref logBucket
+        LogFilePrefix: !Sub "${AWS::StackName}/"
       Tags:
         - Key: StackName
           Value: !Ref AWS::StackName
@@ -1103,7 +1135,7 @@ Resources:
   s3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref s3Bucket
+      Bucket: !If [noS3BucketLogging, !Ref s3Bucket, !Ref s3BucketWithLogging]
       PolicyDocument:
         Statement:
           - Effect: Deny
@@ -1113,7 +1145,12 @@ Resources:
               Bool:
                 "aws:SecureTransport": "false"
             Principal: "*"
-            Resource: !Sub "${s3Bucket.Arn}/*"
+            Resource:
+              !If [
+                noS3BucketLogging,
+                !Sub "${s3Bucket.Arn}/*",
+                !Sub "${s3BucketWithLogging.Arn}/*",
+              ]
 
   logBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1143,9 +1180,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref AWS::NoValue
-        LogFilePrefix: !Ref AWS::NoValue
       Tags:
         - Key: StackName
           Value: !Ref AWS::StackName
@@ -1613,7 +1647,7 @@ Resources:
 
                 # Fix large file upload failure for S3 external storage: https://github.com/nextcloud/server/issues/24390
                 # https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
-                # However, this will create "Some files have not passed the integrity check." in Administration, Overview page
+                # Note: this will trigger "Some files have not passed the integrity check." on first visit to Administration, Overview page
                 # sed -i "s/524288000;/104857600;/g" /var/www/html/lib/private/Files/ObjectStore/S3ConnectionTrait.php
 
                 # sendmail
@@ -1624,7 +1658,6 @@ Resources:
 
                 # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html#cron-jobs
                 crontab -u www-data /root/nextcloud/crontab-www-data
-
               mode: "000740"
               owner: "root"
               group: "root"
@@ -1648,50 +1681,57 @@ Resources:
               # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/default_files_configuration.html
               # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/config_sample_php_parameters.html
               # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/default_files_configuration.html
-              content: !Sub |
-                <?php
+              content: !Sub
+                - |
+                  <?php
 
-                $CONFIG = array(
-                  'trusted_domains' =>
-                  array (
-                    0 => 'localhost',
-                    1 => '*',
-                  ),
-                  'trusted_proxies' =>
-                  array (
-                    0 => '10.0.0.0/8',
-                    1 => '172.16.0.0/12',
-                    2 => '192.168.0.0/16',
-                  ),
-                  'default_phone_region' => 'SG',
-                  'maintenance_window_start' => 1,
-                  'memcache.local' => '\OC\Memcache\APCu',
-                  'memcache.distributed' => '\OC\Memcache\Redis',
-                  'memcache.locking' => '\OC\Memcache\Redis',
-                  'redis' => [
-                       'host' => '/var/run/redis/redis-server.sock',
-                       'port' => 0,
-                       'timeout' => 0.0,
-                  ],
-                  'mysql.utf8mb4' => true,
-                  'htaccess.RewriteBase' => '/',
-                  'defaultapp' => 'files',
-                  'skeletondirectory' => '', # set to '/var/www/html/core/skeleton' to include skeleton files               
-                  'objectstore' => array(
-                    'class' => 'OC\\Files\\ObjectStore\\S3',
-                    'arguments' => array(
-                      'bucket' => '${s3Bucket}',
-                      'region' => '${AWS::Region}',
-                      'hostname' => 's3.${AWS::Region}.amazonaws.com',
-                      'key' => '${userAccessKey}',
-                      'secret' => '${userAccessKey.SecretAccessKey}',
-                      'storageClass' => '${s3StorageClass}',
-                      'uploadPartSize' => '104857600',
-                      'verify_bucket_exists' => false,
-                      'use_ssl' => true
+                  $CONFIG = array(
+                    'trusted_domains' =>
+                    array (
+                      0 => 'localhost',
+                      1 => '*',
                     ),
-                  ),
-                );
+                    'trusted_proxies' =>
+                    array (
+                      0 => '10.0.0.0/8',
+                      1 => '172.16.0.0/12',
+                      2 => '192.168.0.0/16',
+                    ),
+                    'default_phone_region' => 'SG',
+                    'maintenance_window_start' => 1,
+                    'memcache.local' => '\OC\Memcache\APCu',
+                    'memcache.distributed' => '\OC\Memcache\Redis',
+                    'memcache.locking' => '\OC\Memcache\Redis',
+                    'redis' => [
+                         'host' => '/var/run/redis/redis-server.sock',
+                         'port' => 0,
+                         'timeout' => 0.0,
+                    ],
+                    'mysql.utf8mb4' => true,
+                    'htaccess.RewriteBase' => '/',
+                    'defaultapp' => 'files',
+                    'skeletondirectory' => '', # set to '/var/www/html/core/skeleton' to include skeleton files               
+                    'objectstore' => array(
+                      'class' => 'OC\\Files\\ObjectStore\\S3',
+                      'arguments' => array(
+                        'bucket' => '${bucketName}',
+                        'region' => '${AWS::Region}',
+                        'hostname' => 's3.${AWS::Region}.amazonaws.com',
+                        'key' => '${userAccessKey}',
+                        'secret' => '${userAccessKey.SecretAccessKey}',
+                        'storageClass' => '${s3StorageClass}',
+                        'uploadPartSize' => '104857600',
+                        'verify_bucket_exists' => false,
+                        'use_ssl' => true
+                      ),
+                    ),
+                  );
+                - bucketName:
+                    !If [
+                      noS3BucketLogging,
+                      !Ref s3Bucket,
+                      !Ref s3BucketWithLogging,
+                    ]
               mode: "000640"
               owner: "root"
               group: "root"
@@ -1918,7 +1958,11 @@ Resources:
         Resources:
           - !If
             - backupS3
-            - !GetAtt s3Bucket.Arn
+            - !If [
+                noS3BucketLogging,
+                !GetAtt s3Bucket.Arn,
+                !GetAtt s3BucketWithLogging.Arn,
+              ]
             - !Ref AWS::NoValue
           - !If
             - backupEC2
