@@ -153,7 +153,7 @@ Parameters:
   instanceType:
     Type: String
     Description: "https://console.aws.amazon.com/ec2/#InstanceTypes"
-    Default: t4g.medium
+    Default: t4g.xlarge
 
   vpcID:
     Type: AWS::EC2::VPC::Id
@@ -1424,7 +1424,7 @@ Resources:
                 sed -i "s/enabled=1/enable=0/g" /etc/default/apport
                 apt-get remove -q -y ubuntu-report whoopsie apport
                 apt-get autoremove -q -y
-              mode: "000755"
+              mode: "000740"
               owner: "root"
               group: "root"
           commands:
@@ -1645,9 +1645,8 @@ Resources:
                     -c secret="${userAccessKey.SecretAccessKey}" -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}"
                 fi
 
-                # Fix large file upload failure for S3 external storage: https://github.com/nextcloud/server/issues/24390
-                # https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
-                # Note: this will trigger "Some files have not passed the integrity check." on first visit to Administration, Overview page
+                # May fix large file transfer failure for S3 external storage. Best option is to use more powerful instance size
+                # https://github.com/nextcloud/server/issues/24390 https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
                 # sed -i "s/524288000;/104857600;/g" /var/www/html/lib/private/Files/ObjectStore/S3ConnectionTrait.php
 
                 # sendmail
@@ -1720,7 +1719,7 @@ Resources:
                         'key' => '${userAccessKey}',
                         'secret' => '${userAccessKey.SecretAccessKey}',
                         'storageClass' => '${s3StorageClass}',
-                        'uploadPartSize' => '104857600',
+                        'uploadPartSize' => '524288000',
                         'verify_bucket_exists' => false,
                         'use_ssl' => true
                       ),
@@ -1738,7 +1737,7 @@ Resources:
             "/root/nextcloud/crontab-www-data":
               content: |
                 */5  *  *  *  * php -f /var/www/html/cron.php
-              mode: "000644"
+              mode: "000640"
               owner: "root"
               group: "root"
           commands:
