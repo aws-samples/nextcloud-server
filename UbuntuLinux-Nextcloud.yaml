@@ -263,6 +263,7 @@ Parameters:
       - ap-southeast-2
       - ap-southeast-3
       - ap-southeast-4
+      - ap-southeast-5
       - ca-central-1
       - ca-west-1
       - cn-north-1
@@ -1209,8 +1210,6 @@ Resources:
               content: |
                 #!/bin/bash
                 cd /tmp
-                sudo dcv close-session ubuntu
-                sudo dcv close-session console
                 if ((arch | grep -q x86) && (cat /etc/os-release | grep -q 22.04)); then
                   rm -f /tmp/nice-dcv-ubuntu2204-x86_64.tgz
                   wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-x86_64.tgz
@@ -1220,11 +1219,10 @@ Resources:
                   wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-aarch64.tgz
                   tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-aarch64
                 fi
-                sudo systemctl stop dcvserver
                 sudo apt-get install -y ./nice-dcv-server_*.deb
                 sudo apt-get install -y ./nice-dcv-web-viewer_*.deb
                 sudo apt-get install -y ./nice-xdcv_*.deb
-                sudo systemctl restart dcvserver
+                sudo systemctl daemon-reload
               mode: "000755"
               owner: "ubuntu"
               group: "ubuntu"
@@ -1232,7 +1230,7 @@ Resources:
               content: |
                 #!/bin/bash
                 cd /tmp
-                rm -f awscliv2.zip
+                sudo rm -f awscliv2.zip
                 if (arch | grep -q x86); then
                   curl https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip
                 else
@@ -1512,15 +1510,16 @@ Resources:
                 chown www-data:www-data /var/www/.opcache
                 sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php/$PHP_VERSION/fpm/php.ini
 
-                # tune php-fpm: https://docs.nextcloud.com/server/18/admin_manual/installation/server_tuning.html#tune-php-fpm
+                # tune php-fpm for 8 GB RAM: https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#tune-php-fpm
+                # PHP-FPM Process Calculator at https://spot13.com/pmcalculator/
                 sed -i "s/^pm.max_children/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.max_children/a pm.max_children = 120" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
+                sed -i "/^;pm.max_children/a pm.max_children = 230" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
                 sed -i "s/^pm.start_servers/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.start_servers/a pm.start_servers = 12" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
+                sed -i "/^;pm.start_servers/a pm.start_servers = 50" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
                 sed -i "s/^pm.min_spare_servers/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.min_spare_servers/a pm.min_spare_servers = 6" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
+                sed -i "/^;pm.min_spare_servers/a pm.min_spare_servers = 50" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
                 sed -i "s/^pm.max_spare_servers/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.max_spare_servers/a pm.max_spare_servers = 18" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
+                sed -i "/^;pm.max_spare_servers/a pm.max_spare_servers = 150" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
 
                 systemctl enable ${phpVersion}-fpm
                 systemctl restart ${phpVersion}-fpm
