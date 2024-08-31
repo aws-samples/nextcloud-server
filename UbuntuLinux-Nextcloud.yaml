@@ -813,6 +813,27 @@ Resources:
             Action: ["sts:AssumeRole"]
       Path: /
       Policies:
+        - PolicyName: S3PrimaryStoragePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !If [
+                      noS3BucketLogging,
+                      !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}",
+                      !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}",
+                    ]
+                  - !If [
+                      noS3BucketLogging,
+                      !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*",
+                      !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}/*",
+                    ]
+                Condition:
+                  IpAddress:
+                    aws:SourceIp: 0.0.0.0/0
         - !If
           - installDCV
           - PolicyName: dcvLicensing
@@ -999,38 +1020,6 @@ Resources:
   iamGroup:
     Type: AWS::IAM::Group
     Properties:
-
-  iamS3PrimaryStoragePolicy:
-    Type: AWS::IAM::GroupPolicy
-    Properties:
-      GroupName: !Ref iamGroup
-      PolicyName: !Sub
-        - "${AWS::StackName}-iamS3PrimaryStoragePolicy-${UID}"
-        - UID:
-            !Select [
-              3,
-              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-            ]
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action:
-              - s3:*
-            Resource:
-              - !If [
-                  noS3BucketLogging,
-                  !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}",
-                  !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}",
-                ]
-              - !If [
-                  noS3BucketLogging,
-                  !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*",
-                  !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}/*",
-                ]
-            Condition:
-              IpAddress:
-                aws:SourceIp: 0.0.0.0/0
 
   iamS3ExternalStoragePolicy:
     Type: AWS::IAM::GroupPolicy
@@ -1302,7 +1291,12 @@ Resources:
                 sysctl -w net.ipv6.conf.all.disable_ipv6=1
                 sysctl -w net.ipv6.conf.default.disable_ipv6=1
 
+                export DEBIAN_FRONTEND=noninteractive
+                apt-get update
+                apt-get upgrade -q -y
+
                 python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
+
                 sysctl -w net.ipv6.conf.all.disable_ipv6=0
                 sysctl -w net.ipv6.conf.default.disable_ipv6=0
 
@@ -1636,15 +1630,15 @@ Resources:
                 # Enable apps
                 sudo -u www-data php occ app:enable files_external
 
-                 # Mount S3 as external storage?
+                # Mount S3 as external storage?
                 export S3Bucket="${externalS3Bucket}"
                 if [ -n "$S3Bucket" ]; then
                   sudo -u www-data php /var/www/html/occ files_external:create \
-                    "AmazonS3-${externalS3Bucket}"  "amazons3" "amazons3::accesskey" -c key="${userAccessKey}"  \
-                    -c secret="${userAccessKey.SecretAccessKey}" -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}"
+                    "AmazonS3-${externalS3Bucket}"  "amazons3" "amazons3::accesskey" \
+                    -c key="${userAccessKey}" -c secret="${userAccessKey.SecretAccessKey}" -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}"
                 fi
 
-                # May fix large file transfer failure for S3 external storage. Best option is to use more powerful instance size
+                # May fix large file transfer failure for S3 external storage. Best option is to use larger instance size
                 # https://github.com/nextcloud/server/issues/24390 https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
                 # sed -i "s/524288000;/104857600;/g" /var/www/html/lib/private/Files/ObjectStore/S3ConnectionTrait.php
 
@@ -1715,8 +1709,6 @@ Resources:
                         'bucket' => '${bucketName}',
                         'region' => '${AWS::Region}',
                         'hostname' => 's3.${AWS::Region}.amazonaws.com',
-                        'key' => '${userAccessKey}',
-                        'secret' => '${userAccessKey.SecretAccessKey}',
                         'storageClass' => '${s3StorageClass}',
                         'uploadPartSize' => '524288000',
                         'verify_bucket_exists' => false,

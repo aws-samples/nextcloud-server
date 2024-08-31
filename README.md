@@ -51,7 +51,7 @@ S3
 - `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) for primary storage to associate uploaded file with. Default is `STANDARD`
 - `enableS3bucketLogging`: enable [S3 server access logging](https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). Default is `No`
 - `externalS3Bucket` (optional): option to mount existing S3 bucket within Nextcloud as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html). Specify bucket name in your account
-- `externalS3BucketRegion`: [AWS Region](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.RegionsAndAvailabilityZones.html#Concepts.RegionsAndAvailabilityZones.Regions) where `externalS3Bucket` is located
+- `externalS3BucketRegion`: [AWS Region](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-regions) where `externalS3Bucket` is located
 
 
 EBS
@@ -59,7 +59,7 @@ EBS
 - `volumeType`: [EBS General Purpose Volume](https://aws.amazon.com/ebs/general-purpose/) type
 
 AWS Backup
-- `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. Default is `EC2-and-S3` 
+- `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. [Versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) must be enabled on S3 bucket mounted as external storage before [AWS Backup](https://docs.aws.amazon.com/AmazonS3/latest/userguide/backup-for-s3.html) can back it up. Default is `EC2-and-S3` 
 - `scheduleExpression`: CRON expression specifying when AWS Backup initiates a backup job. Default is `cron(0 1 ? * * *)`
 - `scheduleExpressionTimezone`: timezone in which the schedule expression is set. Default is `Etc/UTC`
 - `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `7` days
@@ -134,9 +134,9 @@ sudo systemctl reload apache2
 
 
 ### Filter IAM policy source IP
-As Nextcloud does not support instance profile, the CloudFormation template creates an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) that grants programmatic access to the created S3 bucket.  If `assignStaticIP` is `Yes`, you can limit access key use to requests made by your Nextcloud server. This ensures that that even when the security credentials are leaked, an attacker cannot directly use it to access files from his own address.
+Nextcloud server uses [EC2 IAM role](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) for S3 primary storage access. If `assignStaticIP` is `Yes`, you can limit access to only your Nextcloud server. This ensures that even when the session credentials are stolen, an attacker cannot directly use it to access files from his own address.
 
-The created IAM user can be located in CloudFormation console stack **Resources** section with `Logical ID` of **iamUser**. Click on the `Physical ID` value to view user permission in IAM console. Edit attached inline policy and change "aws:SourceIp" value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
+The created IAM role can be located in CloudFormation console stack **Resources** section with `Logical ID` of **instanceIamRole**. Click on the `Physical ID` value to edit inline permission in IAM console. Change `aws:SourceIp` value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
 ```
 {
@@ -161,9 +161,9 @@ The created IAM user can be located in CloudFormation console stack **Resources*
 }
 ```
 
+An [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) is used for S3 external storage access. Using EC2 IAM role for external storage currently generates errors in nextcloud.log. The IAM user can be located in CloudFormation **Resources** section where `Logical ID` is **iamUser**, and you may want to configure the associated policy `aws:SourceIp` value. 
 
-User [access keys](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) are stored in `/var/www/html/config/config.php` on your EC2 instance. To use the credentials to mount other S3 buckets in your AWS account as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), modify associated IAM policy `Resource` key and add your desired S3 bucket names. 
-
+To use its credentials to mount other S3 buckets in your AWS account as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), modify associated IAM policy `Resource` key and add your desired S3 bucket names. The access key and secret can be retrieved by running `sudo grep secret /root/install-nextcloud.sh`.
 
 
 ### S3 primary storage
@@ -173,7 +173,7 @@ https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primar
 Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
 
 ### Restoring from backup
-If you enable AWS Backup, you can restore your [EC2 instance](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html) and [S3 data](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-s3.html) from recovery points (backups) in your [backup vault](https://docs.aws.amazon.com/aws-backup/latest/devguide/vaults.html). The CloudFormation template creates an IAM role that grants AWS Backup permission to restore your backups. Role name can be located in your CoudFormation stack Resources section as the Physical ID value whose Logical ID value is `backupRestoreRole`
+If you enable AWS Backup, you can restore your [EC2 instance](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html) and [S3 data](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-s3.html) from recovery points (backups) in your [backup vault](https://docs.aws.amazon.com/aws-backup/latest/devguide/vaults.html). The CloudFormation template creates an IAM role that grants AWS Backup permission to restore your backups. Role name can be located in your CoudFormation stack Resources section where Logical ID is `backupRestoreRole`.
 
 ### Recovery points protection
 To protect recovery points from inadvertent or malicious deletions, you can enable [AWS Backup Vault Lock](https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html) in compliance mode to provide immutable WORM (write-once, read-many) backups. Vaults that are locked in compliance mode *cannot be deleted* once the cooling-off period ("grace time") expires if any recovery points are in the vault. Refer to [Protecting data with AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/protecting-data-with-aws-backup-vault-lock/) for more information. 
