@@ -813,7 +813,7 @@ Resources:
             Action: ["sts:AssumeRole"]
       Path: /
       Policies:
-        - PolicyName: S3PrimaryStoragePolicy
+        - PolicyName: Nextcloud-S3PrimaryStoragePolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -861,6 +861,8 @@ Resources:
                     - route53:ChangeResourceRecordSets
                   Resource: !Sub "arn:${AWS::Partition}:route53:::hostedzone/${r53ZoneID}"
                   Condition:
+                    IpAddress:
+                      aws:SourceIp: 0.0.0.0/0
                     ForAllValues:StringEquals:
                       "route53:ChangeResourceRecordSetsRecordTypes": ["TXT"]
                     ForAllValues:StringLike:
@@ -1081,7 +1083,15 @@ Resources:
         Rules:
           - Id: Delete-Incomplete-Multipart-Uploads
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
+              DaysAfterInitiation: 35
+            Status: Enabled
+          - Id: Delete-Previous-Versions
+            NoncurrentVersionExpiration:
+              NewerNoncurrentVersions: 2
+              NoncurrentDays: 7
+            Status: Enabled
+          - Id: Delete-Expired-Delete-Marker
+            ExpiredObjectDeleteMarker: true
             Status: Enabled
       Tags:
         - Key: StackName
@@ -1109,7 +1119,15 @@ Resources:
         Rules:
           - Id: Delete-Incomplete-Multipart-Uploads
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
+              DaysAfterInitiation: 35
+            Status: Enabled
+          - Id: Delete-Previous-Versions
+            NoncurrentVersionExpiration:
+              NewerNoncurrentVersions: 2
+              NoncurrentDays: 7
+            Status: Enabled
+          - Id: Delete-Expired-Delete-Marker
+            ExpiredObjectDeleteMarker: true
             Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Ref logBucket
