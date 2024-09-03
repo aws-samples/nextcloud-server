@@ -290,6 +290,7 @@ Parameters:
 
   volumeSize:
     Type: Number
+    Description: https://github.com/nextcloud/server/issues/40539
     MinValue: 10
     MaxValue: 16384
     Default: 60
@@ -730,7 +731,11 @@ Conditions:
         !Equals [!Ref backupResource, "All"],
       ],
     ]
-  createBackup: !Not [!Equals [!Ref backupResource, "none"]]
+  createBackup:
+    !Or [
+      !Condition backupEC2,
+      !Or [!Condition backupS3, !Condition backupExternalStorage],
+    ]
 
 Mappings:
   EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
@@ -1046,6 +1051,7 @@ Resources:
               - s3:ListBucket
               - s3:GetBucketVersioning
               - s3:DeleteObject
+              - s3:AbortMultipartUpload
             Resource:
               - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}"
               - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}/*"
@@ -1087,8 +1093,7 @@ Resources:
             Status: Enabled
           - Id: Delete-Previous-Versions
             NoncurrentVersionExpiration:
-              NewerNoncurrentVersions: 2
-              NoncurrentDays: 7
+              NoncurrentDays: 1
             Status: Enabled
           - Id: Delete-Expired-Delete-Marker
             ExpiredObjectDeleteMarker: true
@@ -1123,8 +1128,7 @@ Resources:
             Status: Enabled
           - Id: Delete-Previous-Versions
             NoncurrentVersionExpiration:
-              NewerNoncurrentVersions: 2
-              NoncurrentDays: 7
+              NoncurrentDays: 1
             Status: Enabled
           - Id: Delete-Expired-Delete-Marker
             ExpiredObjectDeleteMarker: true
@@ -1217,15 +1221,9 @@ Resources:
               content: |
                 #!/bin/bash
                 cd /tmp
-                if ((arch | grep -q x86) && (cat /etc/os-release | grep -q 22.04)); then
-                  rm -f /tmp/nice-dcv-ubuntu2204-x86_64.tgz
-                  wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-x86_64.tgz
-                  tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-x86_64
-                else
-                  rm -f /tmp/nice-dcv-ubuntu2204-aarch64.tgz
-                  wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-aarch64.tgz
-                  tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-aarch64
-                fi
+                rm -f /tmp/nice-dcv-ubuntu2204-$(arch).tgz
+                wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-$(arch).tgz
+                tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-$(arch)
                 sudo apt-get install -y ./nice-dcv-server_*.deb
                 sudo apt-get install -y ./nice-dcv-web-viewer_*.deb
                 sudo apt-get install -y ./nice-xdcv_*.deb
@@ -1238,11 +1236,7 @@ Resources:
                 #!/bin/bash
                 cd /tmp
                 sudo rm -f awscliv2.zip
-                if (arch | grep -q x86); then
-                  curl https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip
-                else
-                  curl https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o awscliv2.zip
-                fi
+                curl https://awscli.amazonaws.com/awscli-exe-linux-$(arch).zip -o awscliv2.zip
                 unzip -q -o awscliv2.zip
                 /usr/bin/aws --version
                 sudo ./aws/install --update -b /usr/bin
@@ -1400,13 +1394,8 @@ Resources:
                 # NICE DCV: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-server.html
                 curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/NICE-GPG-KEY
                 gpg --import NICE-GPG-KEY
-                if (arch | grep -q x86); then
-                  curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-x86_64.tgz
-                  tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-x86_64
-                else
-                  curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-aarch64.tgz
-                  tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-aarch64
-                fi
+                curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-$(arch).tgz
+                tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-$(arch)
                 apt-get install -q -y ./nice-dcv-server_*.deb
                 apt-get install -q -y ./nice-dcv-web-viewer_*.deb
                 usermod -aG video dcv
@@ -1826,11 +1815,7 @@ Resources:
           apt-get remove -q -y awscli
           cd /tmp/cfn
           # AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-          if (arch | grep -q x86); then
-            curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip
-          else
-            curl -s https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o awscliv2.zip
-          fi
+          curl -s https://awscli.amazonaws.com/awscli-exe-linux-$(arch).zip -o awscliv2.zip
           unzip -q -o awscliv2.zip
           ./aws/install -b /usr/bin
           echo "export AWS_CLI_AUTO_PROMPT=on-partial" >> /home/ubuntu/.bashrc
