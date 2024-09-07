@@ -147,10 +147,13 @@ The [occ](https://docs.nextcloud.com/server/latest/admin_manual/configuration_se
 Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount external storage services including Windows file servers and S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html#available-storage-backends) for details.
 
 ### Downloads
-Desktop and mobile applications download links are available from [Nextcloud Install](https://nextcloud.com/install/#install-clients) page
+Desktop and mobile applications download links are available from [Nextcloud Install](https://nextcloud.com/install/#install-clients) page.
+
+### Using Nextcloud
+Refer to Nextcloud [documentation](https://docs.nextcloud.com/server/stable/user_manual/en/files/index.html).
 
 ### Documentation
-The CloudFormation template focuses on cloud storage and file sharing features of [Nextcloud Files](https://nextcloud.com/files/). Administration and User manuals are available from Nextcloud [documentation site](https://docs.nextcloud.com/). 
+[Administration guide](https://docs.nextcloud.com/server/stable/admin_manual/) and [user manual](https://docs.nextcloud.com/server/stable/user_manual/en/) are available from Nextcloud [documentation site](https://docs.nextcloud.com/). 
 
 ### Further information
 Nextcloud is mentioned by the following blog posts
