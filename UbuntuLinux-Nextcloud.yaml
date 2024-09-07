@@ -56,8 +56,12 @@ Metadata:
         Parameters:
           - s3StorageClass
           - enableS3BucketLogging
+      - Label:
+          default: S3 External Storage
+        Parameters:
           - externalS3Bucket
           - externalS3BucketRegion
+          - externalS3BucketStorageClass
       - Label:
           default: EBS volume
         Parameters:
@@ -232,11 +236,13 @@ Parameters:
   s3StorageClass:
     Type: String
     AllowedValues:
-      - GLACIER_IR
-      - INTELLIGENT_TIERING
-      - ONEZONE_IA
       - STANDARD
       - STANDARD_IA
+      - ONEZONE_IA
+      - INTELLIGENT_TIERING
+      - GLACIER_IR
+      - GLACIER
+      - DEEP_ARCHIVE
     Default: STANDARD
   enableS3BucketLogging:
     Type: String
@@ -245,6 +251,7 @@ Parameters:
       - "Yes"
       - "No"
     Default: "No"
+
   externalS3Bucket:
     Type: String
     Description: https://console.aws.amazon.com/s3/home
@@ -287,6 +294,17 @@ Parameters:
       - us-west-1
       - us-west-2
     Default: us-east-1
+  externalS3BucketStorageClass:
+    Type: String
+    AllowedValues:
+      - STANDARD
+      - STANDARD_IA
+      - ONEZONE_IA
+      - INTELLIGENT_TIERING
+      - GLACIER_IR
+      - GLACIER
+      - DEEP_ARCHIVE
+    Default: STANDARD
 
   volumeSize:
     Type: Number
@@ -895,8 +913,8 @@ Resources:
   securityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref vpcID
       GroupDescription: Allow inbound HTTP, HTTPS
+      VpcId: !Ref vpcID
       SecurityGroupIngress:
         - !If
           - installWebmin
@@ -1221,8 +1239,9 @@ Resources:
               content: |
                 #!/bin/bash
                 cd /tmp
-                rm -f /tmp/nice-dcv-ubuntu2204-$(arch).tgz
-                wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-$(arch).tgz
+                OS_VERSION=$(. /etc/os-release;echo $VERSION_ID | sed -e 's/\.//g')
+                sudo rm -f /tmp/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
+                wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
                 tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-$(arch)
                 sudo apt-get install -y ./nice-dcv-server_*.deb
                 sudo apt-get install -y ./nice-dcv-web-viewer_*.deb
@@ -1375,7 +1394,8 @@ Resources:
             "/root/install-dcv.sh":
               content: |
                 #!/bin/bash
-                cd /tmp
+                mkdir -p /tmp/cfn
+                cd /tmp/cfn
 
                 # NICE DCV prereq: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-prereq.html
                 apt-get install -q -y ubuntu-desktop-minimal
@@ -1394,7 +1414,8 @@ Resources:
                 # NICE DCV: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-server.html
                 curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/NICE-GPG-KEY
                 gpg --import NICE-GPG-KEY
-                curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu2204-$(arch).tgz
+                OS_VERSION=$(. /etc/os-release;echo $VERSION_ID | sed -e 's/\.//g')
+                curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
                 tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-$(arch)
                 apt-get install -q -y ./nice-dcv-server_*.deb
                 apt-get install -q -y ./nice-dcv-web-viewer_*.deb
@@ -1426,6 +1447,14 @@ Resources:
               mode: "000740"
               owner: "root"
               group: "root"
+            "/home/ubuntu/.gnomerc":
+              content: |
+                export XDG_CURRENT_DESKTOP=ubuntu:GNOME
+                export GNOME_SHELL_SESSION_MODE=ubuntu
+                export XDG_DATA_DIRS=/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop
+              mode: "000644"
+              owner: "ubuntu"
+              group: "ubuntu"
           commands:
             install:
               command: "/root/install-dcv.sh > /var/log/install-dcv.log"
@@ -1642,7 +1671,8 @@ Resources:
                 if [ -n "$S3Bucket" ]; then
                   sudo -u www-data php /var/www/html/occ files_external:create \
                     "AmazonS3-${externalS3Bucket}"  "amazons3" "amazons3::accesskey" \
-                    -c key="${userAccessKey}" -c secret="${userAccessKey.SecretAccessKey}" -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}"
+                    -c key="${userAccessKey}" -c secret="${userAccessKey.SecretAccessKey}" \
+                    -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}" -c storageClass="${externalS3BucketStorageClass}"
                 fi
 
                 # May fix large file transfer failure for S3 external storage. Best option is to use larger instance size
