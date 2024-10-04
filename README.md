@@ -36,10 +36,10 @@ Remote Administration
 - `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
 - `ingressIPv6`: allowed IPv6 source prefix to remote administration services. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
 - `allowSSHport`: allow inbound SSH. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
-- `installDCV`: install graphical desktop environment and [NICE DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
+- `installDCV`: install graphical desktop environment and [Amazon DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 
-SSH, NICE DCV and Webmin inbound access from internet are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes. 
+SSH, DCV and Webmin inbound access from internet are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes. 
 
 Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
@@ -74,7 +74,7 @@ It may take more than 30 minutes to provision the entire stack. After your stack
 ### CloudFormation Outputs
 The following are available in **Outputs** section 
 
-- `DCVwebConsole` (if `installDCV` is `Yes`): NICE DCV web browser console URL link. Login as user specified in *Description* field. 
+- `DCVwebConsole` (if `installDCV` is `Yes`): DCV web browser console URL link. Login as user specified in *Description* field. 
 - `EC2console`: EC2 console URL link to your EC2 instance
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
 - `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of your EC2 instance [nextcloud log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
@@ -217,7 +217,7 @@ To strengthen data security posture, you can enable [Amazon Macie](https://aws.a
 To futher secure your EC2 instance, you may want to
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
 - Disable SSH access from public internet (`allowSSHport`). Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access. If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
-- Remove NICE DCV web browser client package by running the command `sudo apt remove -y nice-dcv-web-viewer`. Connect using native Windows, MacOS or Linux [client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
+- Remove DCV web browser client package by running the command `sudo apt remove -y nice-dcv-web-viewer`.]Connect using native Windows, MacOS or Linux [client](https://www.amazondcv.com/)
 - Deploy EC2 instance in a private subnet. Use [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) and [AWS WAF](https://aws.amazon.com/waf/) to [protect your EC2 instance](https://repost.aws/knowledge-center/waf-protect-ec2-instance). You can use [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) to [request a public HTTPS certificate](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and [associate it](https://repost.aws/knowledge-center/associate-acm-certificate-alb-nlb) with your Application Load Balancer
 - Enable [Amazon Inspector](https://docs.aws.amazon.com/inspector/latest/user/what-is-inspector.html) to automatically scan EC2 instance for software vulnerabilities and unintended network exposure
 - Enable [Amazon GuardDuty](https://docs.aws.amazon.com/guardduty/latest/ug/what-is-guardduty.html) and [GuardDuty Malware Protection for EC2](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html) to detect potentially malicious activity in your AWS account
