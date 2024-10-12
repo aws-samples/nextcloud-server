@@ -149,8 +149,12 @@ Parameters:
     Type: String
     Description: https://aws.amazon.com/ec2/graviton/ https://ubuntu.com/aws/pro
     AllowedValues:
+      - Ubuntu 24.04 (arm64)
+      - Ubuntu 24.04 (x86_64)
       - Ubuntu 22.04 (arm64)
       - Ubuntu 22.04 (x86_64)
+      - Ubuntu Pro 24.04 (arm64)
+      - Ubuntu Pro 24.04 (x86_64)
       - Ubuntu Pro 22.04 (arm64)
       - Ubuntu Pro 22.04 (x86_64)
     Default: Ubuntu 22.04 (arm64)
@@ -221,6 +225,7 @@ Parameters:
     Type: String
     AllowedValues:
       - "php8.3"
+      - "php8.4"
     Default: "php8.3"
   databaseOption:
     Type: String
@@ -311,7 +316,7 @@ Parameters:
     Description: https://github.com/nextcloud/server/issues/40539
     MinValue: 10
     MaxValue: 16384
-    Default: 60
+    Default: 65
   volumeType:
     Type: String
     Description: https://aws.amazon.com/ebs/general-purpose/
@@ -694,10 +699,14 @@ Parameters:
     Default: 7
 
 Conditions:
+  useUbuntu2404x86: !Equals [!Ref osVersion, "Ubuntu 24.04 (x86_64)"]
+  useUbuntu2404arm64: !Equals [!Ref osVersion, "Ubuntu 24.04 (arm64)"]
   useUbuntu2204x86: !Equals [!Ref osVersion, "Ubuntu 22.04 (x86_64)"]
   useUbuntu2204arm64: !Equals [!Ref osVersion, "Ubuntu 22.04 (arm64)"]
+  useUbuntuPro2404x86: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (x86_64)"]
+  useUbuntuPro2404arm64: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (arm64)"]
   useUbuntuPro2204x86: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (x86_64)"]
-
+  useUbuntuPro2204arm64: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (arm64)"]
   hasEIC:
     !Not [
       !Equals [
@@ -1825,15 +1834,31 @@ Resources:
     Properties:
       ImageId: # https://ubuntu.com/server/docs/cloud-images/amazon-ec2 https://ubuntu.com/blog/ubuntu-pro-is-now-part-of-the-aws-ec2-console
         !If [
-          useUbuntu2204x86,
-          "{{resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
+          useUbuntu2404x86,
+          "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}",
           !If [
-            useUbuntu2204arm64,
-            "{{resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id}}",
+            useUbuntu2404arm64,
+            "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}",
             !If [
-              useUbuntuPro2204x86,
-              "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
-              "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id}}",
+              useUbuntu2204x86,
+              "{{resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
+              !If [
+                useUbuntu2204arm64,
+                "{{resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id}}",
+                !If [
+                  useUbuntuPro2404x86,
+                  "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}",
+                  !If [
+                    useUbuntuPro2404arm64,
+                    "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}",
+                    !If [
+                      useUbuntuPro2204x86,
+                      "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
+                      "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id}}",
+                    ],
+                  ],
+                ],
+              ],
             ],
           ],
         ]
