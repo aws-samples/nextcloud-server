@@ -246,8 +246,6 @@ Parameters:
       - ONEZONE_IA
       - INTELLIGENT_TIERING
       - GLACIER_IR
-      - GLACIER
-      - DEEP_ARCHIVE
     Default: STANDARD
   enableS3BucketLogging:
     Type: String
@@ -307,8 +305,6 @@ Parameters:
       - ONEZONE_IA
       - INTELLIGENT_TIERING
       - GLACIER_IR
-      - GLACIER
-      - DEEP_ARCHIVE
     Default: STANDARD
 
   volumeSize:
