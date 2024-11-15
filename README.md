@@ -65,7 +65,7 @@ AWS Backup
 - `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. [Versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) must be enabled on S3 bucket mounted as external storage before [AWS Backup](https://docs.aws.amazon.com/AmazonS3/latest/userguide/backup-for-s3.html) can back it up. Default is `EC2-and-S3` 
 - `scheduleExpression`: CRON expression specifying when AWS Backup initiates a backup job. Default is `cron(0 1 ? * * *)`
 - `scheduleExpressionTimezone`: timezone in which the schedule expression is set. Default is `Etc/UTC`
-- `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `7` days
+- `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `35` days
 
 
 It may take more than 30 minutes to provision the entire stack. After your stack has been successfully created, its status changes to **CREATE_COMPLETE**.
@@ -128,7 +128,7 @@ sudo apachetl -t
 ```
 
 Reload Apache server
-```
+``` 
 sudo systemctl reload apache2
 ```
 

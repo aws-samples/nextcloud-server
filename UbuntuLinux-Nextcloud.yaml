@@ -696,7 +696,7 @@ Parameters:
     Default: "Etc/UTC"
   deleteAfterDays:
     Type: Number
-    Default: 7
+    Default: 35
 
 Conditions:
   useUbuntu2404x86: !Equals [!Ref osVersion, "Ubuntu 24.04 (x86_64)"]
