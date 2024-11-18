@@ -11,6 +11,7 @@ The template offers the option to install [Webmin](https://github.com/webmin/web
 ## Architecture diagram
 <img alt="architecture" src="nextcloud-server.png">
 
+Solution can be deployed in a *private subnet* for internal only use. 
 
 ## Deployment from CloudFormation console
 Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and login to AWS [CloudFormation console](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template). 
