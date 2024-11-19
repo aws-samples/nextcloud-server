@@ -2127,7 +2127,7 @@ Outputs:
 
   DCVwebConsole:
     Condition: installDCV
-    Description: NICE DCV web browser client (login as ec2-user)
+    Description: DCV web browser client (login as ubuntu)
     Value:
       !If [
         displayPublicIP,
