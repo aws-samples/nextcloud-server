@@ -29,6 +29,7 @@ Metadata:
           - ec2KeyPair
           - osVersion
           - instanceType
+          - ec2TerminationProtection
       - Label:
           default: Network
         Parameters:
@@ -83,6 +84,8 @@ Metadata:
         default: "Instance name"
       ec2KeyPair:
         default: "Keypair name"
+      ec2TerminationProtection:
+        default: "Enable EC2 termination protection to prevent accidental deletion"
 
       volumeSize:
         default: "Volume size (GiB)"
@@ -105,7 +108,7 @@ Metadata:
       allowSSHport:
         default: "Allow SSH from network"
       installDCV:
-        default: "Install graphical desktop environment and NICE DCV server"
+        default: "Install graphical desktop environment and DCV server"
       installWebmin:
         default: "Install Webmin web-based system administration tool"
 
@@ -132,19 +135,11 @@ Metadata:
       scheduleExpression:
         default: "CRON expression specifying when AWS Backup initiates a backup job"
       scheduleExpressionTimezone:
-        default: "Timezone in which the schedule expression is set"
+        default: "Timezone to set backup schedule"
       deleteAfterDays:
-        default: "Number of days after creation that a recovery point is deleted"
+        default: "Number of days after creation that a recovery point (backup) is deleted"
 
 Parameters:
-  ec2Name:
-    Type: String
-    Default: Nextcloud
-  ec2KeyPair:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "https://console.aws.amazon.com/ec2/#KeyPairs"
-    ConstraintDescription: Specify a key pair
-    AllowedPattern: ".+"
   osVersion:
     Type: String
     Description: https://aws.amazon.com/ec2/graviton/ https://ubuntu.com/aws/pro
@@ -162,6 +157,22 @@ Parameters:
     Type: String
     Description: "https://console.aws.amazon.com/ec2/#InstanceTypes"
     Default: t4g.xlarge
+
+  ec2Name:
+    Type: String
+    Default: Nextcloud
+  ec2KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "https://console.aws.amazon.com/ec2/#KeyPairs"
+    ConstraintDescription: Specify a key pair
+    AllowedPattern: ".+"
+  ec2TerminationProtection:
+    Type: String
+    Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html"
+    Default: "Yes"
+    AllowedValues:
+      - "Yes"
+      - "No"
 
   vpcID:
     Type: AWS::EC2::VPC::Id
@@ -702,7 +713,10 @@ Conditions:
   useUbuntuPro2404x86: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (x86_64)"]
   useUbuntuPro2404arm64: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (arm64)"]
   useUbuntuPro2204x86: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (x86_64)"]
-  useUbuntuPro2204arm64: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (arm64)"]
+
+  useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
+  displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
+  enableProtection: !Equals [!Ref ec2TerminationProtection, "Yes"]
   hasEIC:
     !Not [
       !Equals [
@@ -716,15 +730,12 @@ Conditions:
       ],
     ]
   createSgEIC: !And [!Condition hasEIC, !Condition displayPublicIP]
-
-  useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
-  displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
+  createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
 
   installDCV: !Equals [!Ref installDCV, "Yes"]
   noDCV: !Not [!Condition installDCV]
   installWebmin: !Equals [!Ref installWebmin, "Yes"]
   hasR53Zone: !Not [!Equals [!Ref r53ZoneID, ""]]
-  createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
 
   enableS3BucketLogging: !Equals [!Ref enableS3BucketLogging, "Yes"]
   noS3BucketLogging: !Not [!Condition enableS3BucketLogging]
@@ -988,7 +999,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - installDCV
-          - Description: NICE DCV (IPv4)
+          - Description: DCV (IPv4)
             IpProtocol: tcp
             FromPort: 8443
             ToPort: 8443
@@ -996,7 +1007,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - installDCV
-          - Description: NICE DCV (IPv6)
+          - Description: DCV (IPv6)
             IpProtocol: tcp
             FromPort: 8443
             ToPort: 8443
@@ -1004,7 +1015,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - installDCV
-          - Description: NICE DCV QUIC (IPv4)
+          - Description: DCV QUIC (IPv4)
             IpProtocol: udp
             FromPort: 8443
             ToPort: 8443
@@ -1012,7 +1023,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - installDCV
-          - Description: NICE DCV QUIC (IPv6)
+          - Description: DCV QUIC (IPv6)
             IpProtocol: udp
             FromPort: 8443
             ToPort: 8443
@@ -1286,9 +1297,9 @@ Resources:
                 #!/bin/bash
                 cd /tmp
                 OS_VERSION=$(. /etc/os-release;echo $VERSION_ID | sed -e 's/\.//g')
-                sudo rm -f nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
+                sudo rm -f /tmp/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
                 wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
-                tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-$(arch)
+                tar -xvzf nice-dcv-ubuntu$OS_VERSION-$(arch).tgz && cd nice-dcv-*-ubuntu$OS_VERSION-$(arch)
                 sudo apt-get install -y ./nice-dcv-server_*.deb
                 sudo apt-get install -y ./nice-dcv-web-viewer_*.deb
                 sudo apt-get install -y ./nice-xdcv_*.deb
@@ -1356,21 +1367,15 @@ Resources:
                 sysctl -w net.ipv6.conf.default.disable_ipv6=1
                 export DEBIAN_FRONTEND=noninteractive
 
-                # USB remotization: https://docs.aws.amazon.com/dcv/latest/adminguide/manage-usb-remote.html
-                apt-get install -q -y linux-headers-aws
-                apt-get install -q -y linux-modules-extra-aws
-                apt-get install -q -y usbutils
-                # dcvusbdriverinstaller --quiet
-
                 python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
 
-                apt-get update -y
+                apt-get update
                 apt-get upgrade -q -y
 
                 sysctl -w net.ipv6.conf.all.disable_ipv6=0
                 sysctl -w net.ipv6.conf.default.disable_ipv6=0
 
-                # NICE DCV?
+                # DCV?
                 export installDCV="${installDCV}"
                 case $installDCV in
                   Yes)
@@ -1437,7 +1442,7 @@ Resources:
                 mkdir -p /tmp/cfn
                 cd /tmp/cfn
 
-                # NICE DCV prereq: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-prereq.html
+                # DCV prereq: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-prereq.html
                 apt-get install -q -y ubuntu-desktop-minimal
                 apt-get install -q -y gdm3
                 apt-get install -q -y amazon-ec2-utils
@@ -1453,7 +1458,7 @@ Resources:
                 apt-get install -q -y gnome-tweaks gnome-shell-extension-ubuntu-dock
                 apt-get install -q -y gnome-shell-extension-manager
 
-                # NICE DCV: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-server.html
+                # DCV: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-server.html
                 curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/NICE-GPG-KEY
                 gpg --import NICE-GPG-KEY
                 OS_VERSION=$(. /etc/os-release;echo $VERSION_ID | sed -e 's/\.//g')
@@ -1481,6 +1486,12 @@ Resources:
 
                 # USB DKMS
                 apt-get install -q -y dkms
+                systemctl enable dkms
+
+                # USB remotization: https://docs.aws.amazon.com/dcv/latest/adminguide/manage-usb-remote.html
+                apt-get install -q -y linux-headers-aws linux-modules-extra-aws
+                apt-get install -q -y usbutils
+                # dcvusbdriverinstaller --quiet
 
                 # Disable reporting : https://wiki.ubuntu.com/Apport
                 sed -i "s/enabled=1/enable=0/g" /etc/default/apport
@@ -1850,7 +1861,7 @@ Resources:
       KeyName: !Ref ec2KeyPair
       SubnetId: !Ref subnetID
       Monitoring: true
-      DisableApiTermination: true
+      DisableApiTermination: !If [enableProtection, true, false]
       EbsOptimized: true
       SecurityGroupIds:
         - !Ref securityGroup
@@ -1890,7 +1901,7 @@ Resources:
 
           $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c setup
 
-          # Install desktop environment and NICE DCV
+          # Install desktop environment and DCV?
           export installDCV="${installDCV}"
           case $installDCV in
             Yes)
@@ -1930,7 +1941,7 @@ Resources:
             Yes) # https://webmin.com/download/
               cd /tmp/cfn
               curl -s -L -O https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
-              echo 'Y' | sh ./setup-repos.sh
+              echo 'Y' | sh ./setup-repos.sh -f
               apt-get install -q -y webmin --install-recommends
               ;;
           esac
@@ -2100,23 +2111,19 @@ Outputs:
     Description: EC2 Instance Connect
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=standard&instanceId=${ec2Instance}&osUser=ubuntu&sshPort=22#/"
 
+  EC2serialConsole:
+    Description: EC2 Serial Console
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?&connType=serial&instanceId=${ec2Instance}&serialPort=0#/"
+
   SSMsessionManager:
     Condition: noDCV
     Description: SSM Session Manager
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
+
   SSMsessionManagerDCV:
     Condition: installDCV
-    Description: SSM Session Manager ("sudo passwd ubuntu" to set password for NICE DCV login)
+    Description: SSM Session Manager ("sudo passwd ubuntu" to set password for DCV login)
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
-
-  WebUrl:
-    Description: Website
-    Value:
-      !If [
-        displayPublicIP,
-        !Sub "https://${ec2Instance.PublicIp}",
-        !Sub "https://${ec2Instance.PrivateIp}",
-      ]
 
   DCVwebConsole:
     Condition: installDCV
@@ -2126,6 +2133,15 @@ Outputs:
         displayPublicIP,
         !Sub "https://${ec2Instance.PublicIp}:8443",
         !Sub "https://${ec2Instance.PrivateIp}:8443",
+      ]
+
+  WebUrl:
+    Description: Website
+    Value:
+      !If [
+        displayPublicIP,
+        !Sub "https://${ec2Instance.PublicIp}",
+        !Sub "https://${ec2Instance.PrivateIp}",
       ]
 
   WebminUrl:

@@ -11,7 +11,7 @@ The template offers the option to install [Webmin](https://github.com/webmin/web
 ## Architecture diagram
 <img alt="architecture" src="nextcloud-server.png">
 
-Solution can be deployed in a *private subnet* for internal only use. 
+Solution can be deployed in a *private subnet* for internal only use.
 
 ## Deployment from CloudFormation console
 Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and login to AWS [CloudFormation console](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template). 
@@ -26,6 +26,7 @@ EC2 instance
 - `ec2KeyPair`: [EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) name. [Create key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html) if necessary
 - `osVersion`: operating system version and processor architecture. Default architecture is [Graviton](https://aws.amazon.com/ec2/graviton/) arm64
 - `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `t4g.xlarge` [burstable instance type](https://aws.amazon.com/ec2/instance-types/t4/)
+- `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
 
 Network
 - `vpcID`: [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) with internet connectivity. Select [default VPC](https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html) if unsure
@@ -34,13 +35,13 @@ Network
 - `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Default is `Yes`
 
 Remote Administration
-- `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from public internet. Default is `0.0.0.0/0`. 
+- `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from network. Default is `0.0.0.0/0`. 
 - `ingressIPv6`: allowed IPv6 source prefix to remote administration services. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
 - `allowSSHport`: allow inbound SSH. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
 - `installDCV`: install graphical desktop environment and [Amazon DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 
-SSH, DCV and Webmin inbound access from internet are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes. 
+SSH, DCV and Webmin inbound access are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes. 
 
 Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
@@ -226,8 +227,8 @@ To futher secure your EC2 instance, you may want to
 ## Clean Up
 To remove created resources,
 - [Empty](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) created S3 bucket(s)
-- [Delete](https://docs.aws.amazon.com/aws-backup/latest/devguide/deleting-backups.html) recovery points in created backup vault
-- [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection
+- [Delete](https://docs.aws.amazon.com/aws-backup/latest/devguide/deleting-backups.html) any recovery points in created backup vault
+- [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection (if enabled)
 - [Delete](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-delete-stack.html) CloudFormation stack
 
 
