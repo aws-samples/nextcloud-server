@@ -76,10 +76,10 @@ It may take more than 30 minutes to provision the entire stack. After your stack
 ### CloudFormation Outputs
 The following are available in **Outputs** section 
 
-- `DCVwebConsole` (if `installDCV` is `Yes`): DCV web browser console URL link. Login as user specified in *Description* field. 
+- `DCVwebConsole` (if `installDCV` is `Yes`): DCV web browser console URL link. Login as `ubuntu`. Set user password by running `sudo passwd ubuntu` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
 - `EC2console`: EC2 console URL link to your EC2 instance
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
-- `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of your EC2 instance [nextcloud log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
+- `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
 - `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password)
 - `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
 - `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
@@ -103,7 +103,7 @@ Ensure you have a domain name whose DNS entry resolves to your EC2 instance IP a
 ### Obtain HTTPS certificate
 
 #### Option 1: Using Certbot Apache plugin
-This option requires your domain name to resolve to your EC2 instance *public* IP address. From terminal, run the below command
+This option requires your domain name to resolve to your EC2 instance *public internet* IP address. From terminal, run the below command
 ```
 sudo certbot --apache
 ```

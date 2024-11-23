@@ -700,7 +700,7 @@ Parameters:
       - Pacific/Tarawa
       - Pacific/Tongatapu
       - WET
-    Default: "Etc/UTC"
+    Default: Etc/UTC
   deleteAfterDays:
     Type: Number
     Default: 35
@@ -882,7 +882,7 @@ Resources:
           - Effect: Allow
             Principal:
               Service: [ec2.amazonaws.com]
-            Action: ["sts:AssumeRole"]
+            Action: [sts:AssumeRole]
       Path: /
       Policies:
         - PolicyName: Nextcloud-S3PrimaryStoragePolicy
@@ -915,7 +915,7 @@ Resources:
                 - Effect: Allow
                   Action:
                     - s3:GetObject
-                  Resource: !Sub "arn:*:s3:::dcv-license.${AWS::Region}/*"
+                  Resource: !Sub arn:*:s3:::dcv-license.${AWS::Region}/*
           - !Ref AWS::NoValue
         - !If
           - hasR53Zone
@@ -931,15 +931,15 @@ Resources:
                 - Effect: Allow
                   Action:
                     - route53:ChangeResourceRecordSets
-                  Resource: !Sub "arn:${AWS::Partition}:route53:::hostedzone/${r53ZoneID}"
+                  Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/${r53ZoneID}
                   Condition:
                     IpAddress:
                       aws:SourceIp: 0.0.0.0/0
                     ForAllValues:StringEquals:
-                      "route53:ChangeResourceRecordSetsRecordTypes": ["TXT"]
+                      route53:ChangeResourceRecordSetsRecordTypes: [TXT]
                     ForAllValues:StringLike:
-                      "route53:ChangeResourceRecordSetsNormalizedRecordNames":
-                        ["_acme-challenge.*"]
+                      route53:ChangeResourceRecordSetsNormalizedRecordNames:
+                        [_acme-challenge.*]
           - !Ref AWS::NoValue
       ManagedPolicyArns:
         - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -1434,6 +1434,62 @@ Resources:
               mode: "000644"
               owner: "root"
               group: "root"
+            "/root/install-sw.sh":
+              content: !Sub |
+                #!/bin/bash
+                mkdir -p /tmp/cfn
+                cd /tmp/cfn
+
+                # Update OS
+                apt-get update
+                apt-get upgrade -q -y
+                apt-get autoremove -q -y
+
+                # remove AWSCLI version 1
+                apt-get remove -q -y awscli
+                cd /tmp/cfn
+                # AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+                snap install aws-cli --classic
+                echo "export AWS_CLI_AUTO_PROMPT=on-partial" >> /home/ubuntu/.bashrc
+
+                # CloudWatch agent: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-commandline-fleet.html#download-CloudWatch-Agent-on-EC2-Instance-commandline-fleet
+                if (arch | grep -q x86); then
+                  curl -s -L -O https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+                else
+                  curl -s -L -O https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb
+                fi
+                apt-get install -q -y ./amazon-cloudwatch-agent.deb
+                /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
+                systemctl enable --now amazon-cloudwatch-agent
+
+                # Webmin: https://webmin.com/download/
+                export webmin="${installWebmin}"
+                case $webmin in
+                  Yes)
+                    cd /tmp/cfn
+                    curl -s -L -O https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
+                    echo 'Y' | sh ./setup-repos.sh -f
+                    apt-get install -q -y webmin --install-recommends
+                    ;;
+                esac
+
+                # USB and GPU driver DKMS
+                apt-get update
+                apt-get install -q -y dkms
+
+                # Kernel headers for GPU and USB remotization
+                apt-get install -q -y linux-headers-aws
+                apt-get install -q -y linux-modules-extra-aws
+                apt-get install -q -y usbutils
+
+                rm -f ${!0}
+              mode: "000740"
+              owner: "root"
+              group: "root"
+          commands:
+            install:
+              command: "/root/install-sw.sh >> /var/log/install-sw.log 2>&1"
+              ignoreErrors: "true"
         00_dcv_install:
           files:
             "/root/install-dcv.sh":
@@ -1484,19 +1540,12 @@ Resources:
                 # Console session support
                 sed -i "/^\[session-management\/automatic-console-session/a owner=\"ubuntu\"\nstorage-root=\"%home%\"" /etc/dcv/dcv.conf
 
-                # USB DKMS
-                apt-get install -q -y dkms
-                systemctl enable dkms
-
-                # USB remotization: https://docs.aws.amazon.com/dcv/latest/adminguide/manage-usb-remote.html
-                apt-get install -q -y linux-headers-aws linux-modules-extra-aws
-                apt-get install -q -y usbutils
-                # dcvusbdriverinstaller --quiet
-
                 # Disable reporting : https://wiki.ubuntu.com/Apport
                 sed -i "s/enabled=1/enable=0/g" /etc/default/apport
                 apt-get remove -q -y ubuntu-report whoopsie apport
                 apt-get autoremove -q -y
+
+                rm -f ${!0}
               mode: "000740"
               owner: "root"
               group: "root"
@@ -1510,7 +1559,7 @@ Resources:
               group: "ubuntu"
           commands:
             install:
-              command: "/root/install-dcv.sh > /var/log/install-dcv.log"
+              command: "/root/install-dcv.sh > /var/log/install-dcv.log 2>&1"
               ignoreErrors: "true"
         10_nextcloud_install:
           files:
@@ -1740,6 +1789,8 @@ Resources:
 
                 # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html#cron-jobs
                 crontab -u www-data /root/nextcloud/crontab-www-data
+
+                rm -f ${!0}
               mode: "000740"
               owner: "root"
               group: "root"
@@ -1894,8 +1945,8 @@ Resources:
           curl -s -L -O https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
           tar -xf aws-cfn-bootstrap-py3-latest.tar.gz
           cd aws-cfn-bootstrap-2.0
-          python3 setup.py build
-          python3 setup.py install
+          python3 setup.py build > /var/log/install-cfn-helper.log 2>&1
+          python3 setup.py install >> /var/log/install-cfn-helper.log 2>&1
           cd /tmp/cfn
           export CFN_INIT="python3 /usr/local/bin/cfn-init"
 
@@ -1909,42 +1960,8 @@ Resources:
               ;;
           esac 
 
-          # remove AWSCLI version 1
-          apt-get remove -q -y awscli
-          cd /tmp/cfn
-          # AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-          snap install aws-cli --classic
-          echo "export AWS_CLI_AUTO_PROMPT=on-partial" >> /home/ubuntu/.bashrc
-
-          # Update OS
-          apt-get update -q
-          apt-get upgrade -q -y
-          apt-get autoremove -q -y
-
           # Nextcloud
           $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c nextcloud_install
-
-          # CloudWatch agent: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-on-EC2-Instance.html
-          if (uname -a | grep -q x86); then
-            curl -s -L -O https://s3.${AWS::Region}.amazonaws.com/amazoncloudwatch-agent-${AWS::Region}/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-          else
-            curl -s -L -O https://s3.${AWS::Region}.amazonaws.com/amazoncloudwatch-agent-${AWS::Region}/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb
-          fi
-          apt-get install -q -y ./amazon-cloudwatch-agent.deb
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
-          usermod -a -G www-data cwagent
-          systemctl enable --now amazon-cloudwatch-agent
-
-          # Webmin
-          export webmin="${installWebmin}"
-          case $webmin in
-            Yes) # https://webmin.com/download/
-              cd /tmp/cfn
-              curl -s -L -O https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
-              echo 'Y' | sh ./setup-repos.sh -f
-              apt-get install -q -y webmin --install-recommends
-              ;;
-          esac
 
           #
           systemctl set-default multi-user.target
@@ -2028,7 +2045,11 @@ Resources:
     Properties:
       BackupVaultName: !Sub
         - "${AWS::StackName}-backupVault-${UID}"
-        - UID: !Select [5, !Split ["-", !Sub "${AWS::StackId}"]]
+        - UID:
+            !Select [
+              3,
+              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+            ]
       BackupVaultTags:
         {
           "StackName": !Ref AWS::StackName,
@@ -2062,7 +2083,11 @@ Resources:
             - !Ref AWS::NoValue
         SelectionName: !Sub
           - "${AWS::StackName}-backupSelection-${UID}"
-          - UID: !Select [5, !Split ["-", !Sub "${AWS::StackId}"]]
+          - UID:
+              !Select [
+                3,
+                !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+              ]
 
   backupRestoreRole:
     Type: AWS::IAM::Role
@@ -2074,7 +2099,7 @@ Resources:
           - Effect: Allow
             Principal:
               Service: backup.amazonaws.com
-            Action: "sts:AssumeRole"
+            Action: sts:AssumeRole
       Policies:
         - PolicyName: restore-EC2-instance-profile
           PolicyDocument: # https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html
@@ -2113,7 +2138,7 @@ Outputs:
 
   EC2serialConsole:
     Description: EC2 Serial Console
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?&connType=serial&instanceId=${ec2Instance}&serialPort=0#/"
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=${ec2Instance}&serialPort=0#/"
 
   SSMsessionManager:
     Condition: noDCV
