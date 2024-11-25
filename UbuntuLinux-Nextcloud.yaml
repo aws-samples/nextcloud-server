@@ -1735,6 +1735,7 @@ Resources:
 
                 # Generate random Nextcloud and MySQL/MariaDB password
                 export rndPassword=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1`
+                echo "Password = $rndPassword" >> /root/.nextcloud-credentials
 
                 # Prepare database
                 sudo mysql -u root -e "CREATE USER 'nextcloud'@'localhost' IDENTIFIED BY '$rndPassword';
@@ -1870,6 +1871,17 @@ Resources:
               content: |
                 */5  *  *  *  * php -f /var/www/html/cron.php
               mode: "000640"
+              owner: "root"
+              group: "root"
+            "/root/.nextcloud-credentials":
+              content: !Sub |
+                IAM User: ${iamUser}
+                ACCESS_KEY = ${userAccessKey}
+                SECRET_ACCESS_KEY = ${userAccessKey.SecretAccessKey}
+
+                Database User: nextcloud
+
+              mode: "000400"
               owner: "root"
               group: "root"
           commands:
