@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Nextcloud ( https://github.com/aws-samples/nextcloud-server )
+Description: Nextcloud ( https://github.com/aws-samples/nextcloud-server ) (uksb-kole4t76z0)
 Transform: "AWS::LanguageExtensions"
 
 Metadata:
@@ -1354,7 +1354,7 @@ Resources:
                 After=default.target network.target
 
                 [Service]
-                ExecStart=/opt/dcv-post-reboot.sh
+                ExecStart=/bin/sh -c "/opt/dcv-post-reboot.sh 2>&1 | tee -a /var/log/install-sw.log"
 
                 [Install]
                 WantedBy=default.target
