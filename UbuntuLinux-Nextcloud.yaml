@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Nextcloud ( https://github.com/aws-samples/nextcloud-server ) (uksb-kole4t76z0)
+Description: Nextcloud ( https://github.com/aws-samples/nextcloud-server ) (uksb-kole4t76z0) (tag:Ubuntu)
 Transform: "AWS::LanguageExtensions"
 
 Metadata:
@@ -163,12 +163,12 @@ Parameters:
     Default: Nextcloud
   ec2KeyPair:
     Type: AWS::EC2::KeyPair::KeyName
-    Description: "https://console.aws.amazon.com/ec2/#KeyPairs"
+    Description: https://console.aws.amazon.com/ec2/#KeyPairs
     ConstraintDescription: Specify a key pair
     AllowedPattern: ".+"
   ec2TerminationProtection:
     Type: String
-    Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html"
+    Description: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html
     Default: "Yes"
     AllowedValues:
       - "Yes"
@@ -252,11 +252,11 @@ Parameters:
   s3StorageClass:
     Type: String
     AllowedValues:
+      - GLACIER_IR
+      - INTELLIGENT_TIERING
+      - ONEZONE_IA
       - STANDARD
       - STANDARD_IA
-      - ONEZONE_IA
-      - INTELLIGENT_TIERING
-      - GLACIER_IR
     Default: STANDARD
   enableS3BucketLogging:
     Type: String
@@ -301,6 +301,7 @@ Parameters:
       - il-central-1
       - me-central-1
       - me-south-1
+      - mx-central-1
       - sa-east-1
       - us-east-1
       - us-east-2
@@ -312,11 +313,11 @@ Parameters:
   externalS3BucketStorageClass:
     Type: String
     AllowedValues:
+      - GLACIER_IR
+      - INTELLIGENT_TIERING
+      - ONEZONE_IA
       - STANDARD
       - STANDARD_IA
-      - ONEZONE_IA
-      - INTELLIGENT_TIERING
-      - GLACIER_IR
     Default: STANDARD
 
   volumeSize:
@@ -1308,6 +1309,19 @@ Resources:
               mode: "000755"
               owner: "ubuntu"
               group: "ubuntu"
+            "/home/ubuntu/update-awscli":
+              content: |
+                #!/bin/bash
+                cd /tmp
+                sudo rm -f /tmp/awscliv2.zip
+                curl https://awscli.amazonaws.com/awscli-exe-linux-$(arch).zip -o awscliv2.zip
+                unzip -q -o awscliv2.zip
+                /usr/bin/aws --version
+                sudo ./aws/install --update -b /usr/bin
+                /usr/bin/aws --version
+              mode: "000755"
+              owner: "ubuntu"
+              group: "ubuntu"
             "/etc/systemd/system/dcv-virtual-session.service":
               content: |
                 [Unit]
@@ -1331,20 +1345,14 @@ Resources:
                   for dcvUser in "${dcvUsers[@]}"
                   do
                     if (! /usr/bin/dcv list-sessions | grep -q $dcvUser); then
-                      case $dcvUser in
-                        root)
-                          /usr/bin/dcv create-session $dcvUser --owner root --storage-root /root
-                          ;;
-                        *)
-                          /usr/bin/dcv create-session $dcvUser --owner $dcvUser --user $dcvUser --storage-root /home/$dcvUser
-                          ;;
-                      esac
+                      /usr/bin/dcv create-session $dcvUser --owner $dcvUser --storage-root %home% --type virtual
                     fi
                   done
+                  date
                   /usr/bin/dcv list-sessions
                   sleep 5
                 done
-              mode: "000755"
+              mode: "000744"
               owner: "root"
               group: "root"
             "/etc/systemd/system/dcv-post-reboot.service":
@@ -1442,16 +1450,9 @@ Resources:
                 cd /tmp/cfn
 
                 # Update OS
-                apt-get update
+                apt-get update -q
                 apt-get upgrade -q -y
                 apt-get autoremove -q -y
-
-                # remove AWSCLI version 1
-                apt-get remove -q -y awscli
-                cd /tmp/cfn
-                # AWS CLI v2: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-                snap install aws-cli --classic
-                echo "export AWS_CLI_AUTO_PROMPT=on-partial" >> /home/ubuntu/.bashrc
 
                 # CloudWatch agent: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-commandline-fleet.html#download-CloudWatch-Agent-on-EC2-Instance-commandline-fleet
                 if (arch | grep -q x86); then
@@ -1482,6 +1483,21 @@ Resources:
                 apt-get install -q -y linux-headers-aws
                 apt-get install -q -y linux-modules-extra-aws
                 apt-get install -q -y usbutils
+                # AWS CLI: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+                apt-get remove -q -y awscli
+                sudo snap install aws-cli --classic
+                if [ -e /snap/bin/aws ]; then
+                  rm -f /home/ubuntu/update-awscli
+                else
+                  /home/ubuntu/update-awscli
+                fi
+                echo "export AWS_CLI_AUTO_PROMPT=on-partial" >> /home/ubuntu/.bashrc
+
+                # Certbot: https://eff-certbot.readthedocs.io/en/stable/install.html#snap-recommended
+                sudo snap install certbot --classic
+                ln -s /snap/bin/certbot /usr/bin/certbot
+                sudo snap set certbot trust-plugin-with-root=ok
+                sudo snap install certbot-dns-route53
 
                 rm -f ${!0}
               mode: "000740"
@@ -1494,10 +1510,14 @@ Resources:
         00_dcv_install:
           files:
             "/root/install-dcv.sh":
-              content: |
+              content: !Sub |
                 #!/bin/bash
                 mkdir -p /tmp/cfn
                 cd /tmp/cfn
+
+                # Update OS
+                apt-get update -q
+                apt-get upgrade -q -y
 
                 # DCV prereq: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-prereq.html
                 apt-get install -q -y ubuntu-desktop-minimal
@@ -1588,6 +1608,7 @@ Resources:
                 apt-get install -q -y ${phpVersion}-{memcached,redis,mysql}
                 apt-get install -q -y ${phpVersion}-{igbinary,msgpack,zstd,lz4,bz2}
                 apt-get install -q -y ${phpVersion}-{smbclient,gmp}
+                apt-get install -q -y ${phpVersion}-ldap
 
                 # Redis for caching and session state
                 apt-get install -q -y redis-server
@@ -1657,10 +1678,6 @@ Resources:
                 systemctl enable ${phpVersion}-fpm
                 systemctl restart ${phpVersion}-fpm
 
-                # Certbot
-                apt-get install -q -y certbot
-                apt-get install -q -y python3-certbot-apache python3-certbot-dns-route53 python-certbot-dns-route53-doc 
-
                 # Apache MPM event: https://httpd.apache.org/docs/2.4/mod/event.html
                 a2dismod ${phpVersion}
                 a2dismod mpm_prefork
@@ -1716,7 +1733,7 @@ Resources:
                     sed -i "/^#innodb_buffer_pool_size/a innodb_buffer_pool_size = 512M" /etc/mysql/mariadb.conf.d/50-server.cnf
                     systemctl enable --now mariadb
                     ;;
-                esac              
+                esac
 
                 # Nextcloud files
                 cd /tmp
@@ -1769,6 +1786,8 @@ Resources:
 
                 # Enable apps
                 sudo -u www-data php occ app:enable files_external
+                sudo -u www-data php occ app:install user_saml
+                sudo -u www-data php occ app:disable user_saml
 
                 # Mount S3 as external storage?
                 export S3Bucket="${externalS3Bucket}"
@@ -1949,8 +1968,11 @@ Resources:
           # https://stackoverflow.com/questions/33370297/apt-get-update-non-interactive
           export DEBIAN_FRONTEND=noninteractive
 
+          systemctl stop apt-daily.timer apt-daily-upgrade.timer
           apt-get clean all
           apt-get update -q
+          apt-get install -q -y procps
+          pkill apt
           apt-get install -q -y wget tmux unzip tar curl sed
 
           # CfN scripts: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
