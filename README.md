@@ -1,2223 +1,261 @@
-AWSTemplateFormatVersion: 2010-09-09
-Description: Nextcloud ( https://github.com/aws-samples/nextcloud-server ) (uksb-kole4t76z0) (tag:Ubuntu)
-Transform: "AWS::LanguageExtensions"
+# Nextcloud-Server
+[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running [Nextcloud Files](https://nextcloud.com/files/) file synchronization and sharing server, with a new [Amazon S3](https://aws.amazon.com/s3/) bucket as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection. Includes option to mount existing S3 bucket.
 
-Metadata:
-  License:
-    Description: >
-      Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-      SPDX-License-Identifier: MIT-0
 
-      Permission is hereby granted, free of charge, to any person obtaining a copy of this
-      software and associated documentation files (the "Software"), to deal in the Software
-      without restriction, including without limitation the rights to use, copy, modify,
-      merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
-      permit persons to whom the Software is furnished to do so.
+## Notice
+Although this repository is released under the [MIT-0](LICENSE) license, its CloudFormation template uses features from [Nextcloud](https://github.com/nextcloud/server) project. Nextcloud project's licensing includes the [AGPL](https://github.com/nextcloud/server?tab=AGPL-3.0-1-ov-file) license.
 
-      THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-      INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-      PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-      HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-      OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-      SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: EC2 instance
-        Parameters:
-          - ec2Name
-          - ec2KeyPair
-          - osVersion
-          - instanceType
-          - ec2TerminationProtection
-      - Label:
-          default: Network
-        Parameters:
-          - vpcID
-          - subnetID
-          - displayPublicIP
-          - assignStaticIP
-      - Label:
-          default: Remote administration
-        Parameters:
-          - ingressIPv4
-          - ingressIPv6
-          - allowSSHport
-          - installDCV
-          - installWebmin
-      - Label:
-          default: Nextcloud
-        Parameters:
-          - adminUsername
-          - phpVersion
-          - databaseOption
-          - r53ZoneID
-      - Label:
-          default: S3
-        Parameters:
-          - s3StorageClass
-          - enableS3BucketLogging
-      - Label:
-          default: S3 External Storage
-        Parameters:
-          - externalS3Bucket
-          - externalS3BucketRegion
-          - externalS3BucketStorageClass
-      - Label:
-          default: EBS volume
-        Parameters:
-          - volumeSize
-          - volumeType
-      - Label:
-          default: AWS Backup
-        Parameters:
-          - backupResource
-          - scheduleExpression
-          - scheduleExpressionTimezone
-          - deleteAfterDays
-    ParameterLabels:
-      osVersion:
-        default: "OS version and architecture"
-      instanceType:
-        default: "Instance type (x86_64 or arm64)"
-      ec2Name:
-        default: "Instance name"
-      ec2KeyPair:
-        default: "Keypair name"
-      ec2TerminationProtection:
-        default: "Enable EC2 termination protection to prevent accidental deletion"
+The template offers the option to install [Webmin](https://github.com/webmin/webmin) which is released under [BSD-3-Clause](https://github.com/webmin/webmin?tab=BSD-3-Clause-1-ov-file) license. Usage of template indicates acceptance of license agreements of all software that is installed in the EC2 instance. 
 
-      volumeSize:
-        default: "Volume size (GiB)"
-      volumeType:
-        default: "Volume type"
 
-      vpcID:
-        default: "VPC with internet connectivity"
-      subnetID:
-        default: "Subnet with internet connectivity"
-      displayPublicIP:
-        default: "EC2 in public subnet with public IP assigned?"
-      assignStaticIP:
-        default: "[Elastic IP] Assign static public internet IPv4 address"
 
-      ingressIPv4:
-        default: "Allowed IPv4 prefix"
-      ingressIPv6:
-        default: "Allowed IPv6 prefix"
-      allowSSHport:
-        default: "Allow SSH from network"
-      installDCV:
-        default: "Install graphical desktop environment and DCV server"
-      installWebmin:
-        default: "Install Webmin web-based system administration tool"
+## About CloudFormation template
 
-      adminUsername:
-        default: "Nextcloud admin username"
-      phpVersion:
-        default: "PHP version to install"
-      r53ZoneID:
-        default: "(Optional) Route 53 hosted zone ID for certbot-dns-route53 access. Leave blank not to grant"
-      databaseOption:
-        default: "Database server to install"
+### Installation method
+This template uses [Nextcloud .tar archive](https://nextcloud.com/install/) to install Nextcloud, which is a [recommended 
+method](https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html).
 
-      s3StorageClass:
-        default: "Storage class for primary storage ( https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare )"
-      enableS3BucketLogging:
-        default: "Enable primary storage S3 server access logging"
-      externalS3Bucket:
-        default: "(Optional) Existing S3 bucket to mount as external storage. Leave blank for none"
-      externalS3BucketRegion:
-        default: "Region where external storage S3 bucket is located"
+### Requirements
+Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html)
+- EC2 instance must be provisioned in a subnet with IPv4 internet connectivity. 
+- Ensure that the instance type you specify matches the selected processor architecture (x86_64/arm64).
 
-      backupResource:
-        default: "Resources to backup"
-      scheduleExpression:
-        default: "CRON expression specifying when AWS Backup initiates a backup job"
-      scheduleExpressionTimezone:
-        default: "Timezone to set backup schedule"
-      deleteAfterDays:
-        default: "Number of days after creation that a recovery point (backup) is deleted"
+### Architecture diagram
+<img alt="architecture" src="nextcloud-server.png">
 
-Parameters:
-  osVersion:
-    Type: String
-    Description: https://aws.amazon.com/ec2/graviton/ https://ubuntu.com/aws/pro
-    AllowedValues:
-      - Ubuntu 24.04 (arm64)
-      - Ubuntu 24.04 (x86_64)
-      - Ubuntu 22.04 (arm64)
-      - Ubuntu 22.04 (x86_64)
-      - Ubuntu Pro 24.04 (arm64)
-      - Ubuntu Pro 24.04 (x86_64)
-      - Ubuntu Pro 22.04 (arm64)
-      - Ubuntu Pro 22.04 (x86_64)
-    Default: Ubuntu 22.04 (arm64)
-  instanceType:
-    Type: String
-    Description: "https://console.aws.amazon.com/ec2/#InstanceTypes"
-    Default: t4g.xlarge
+*Solution can be deployed in a private subnet for internal only use.*
 
-  ec2Name:
-    Type: String
-    Default: Nextcloud
-  ec2KeyPair:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: https://console.aws.amazon.com/ec2/#KeyPairs
-    ConstraintDescription: Specify a key pair
-    AllowedPattern: ".+"
-  ec2TerminationProtection:
-    Type: String
-    Description: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html
-    Default: "Yes"
-    AllowedValues:
-      - "Yes"
-      - "No"
+## Deploying using CloudFormation console
+Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and login to AWS [CloudFormation console](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template). 
 
-  vpcID:
-    Type: AWS::EC2::VPC::Id
-    Description: "https://console.aws.amazon.com/vpcconsole/home#vpcs:"
-    ConstraintDescription: Specify a valid value
-    AllowedPattern: ".+"
-  subnetID:
-    Type: AWS::EC2::Subnet::Id
-    Description: "https://console.aws.amazon.com/vpcconsole/home#subnets:"
-    ConstraintDescription: Specify a valid value
-    AllowedPattern: ".+"
-  assignStaticIP:
-    Type: String
-    Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html"
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "Yes"
-  displayPublicIP:
-    Type: String
-    Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-instance-addressing.html#concepts-public-addresses"
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "Yes"
+Start the [Create Stack wizard](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html#cfn-using-console-initiating-stack-creation) by choosing **Create Stack**. [Select stack template](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html) by selecting **Upload a template file**, **Choose File**, select your `.yaml` file and click **Next**. Enter a **Stack name** and specify parameters values. 
 
-  ingressIPv4:
-    Type: String
-    Description: "e.g. 1.2.3.4/32, get your source IP from https://checkip.amazonaws.com "
-    Default: 0.0.0.0/0
-  ingressIPv6:
-    Type: String
-    Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-instance-addressing.html#ipv6-addressing"
-    Default: ::/0
-  allowSSHport:
-    Type: String
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "No"
-  installDCV:
-    Type: String
-    Description: https://aws.amazon.com/hpc/dcv/
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "No"
-  installWebmin:
-    Type: String
-    Description: https://webmin.com/
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "No"
+### Parameter options
+EC2 instance
+- `ec2Name`: EC2 instance name 
+- `ec2KeyPair`: [EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) name. [Create key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html) if necessary
+- `osVersion`: operating system version and processor architecture. Default architecture is [Graviton](https://aws.amazon.com/ec2/graviton/) arm64
+- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `t4g.xlarge` [burstable instance type](https://aws.amazon.com/ec2/instance-types/t4/)
+- `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
 
-  adminUsername:
-    Type: String
-    AllowedPattern: ".+"
-    Default: "admin"
-  phpVersion:
-    Type: String
-    AllowedValues:
-      - "php8.3"
-      - "php8.4"
-    Default: "php8.3"
-  databaseOption:
-    Type: String
-    AllowedValues:
-      - "MariaDB"
-      - "MySQL"
-    Default: "MariaDB"
-  r53ZoneID:
-    Type: String
-    Description: https://console.aws.amazon.com/route53/v2/hostedzones
-    Default: ""
+Network
+- `vpcID`: [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) with internet connectivity. Select [default VPC](https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html) if unsure
+- `subnetID`: subnet with internet connectivity. Select subnet in default VPC if unsure
+- `displayPublicIP`: select `No` if your EC2 instance will not receive [public IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-instance-addressing.html#concepts-public-addresses). EC2 private IP will be displayed in CloudFormation Outputs section instead. Default is `Yes`
+- `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Default is `Yes`
 
-  s3StorageClass:
-    Type: String
-    AllowedValues:
-      - GLACIER_IR
-      - INTELLIGENT_TIERING
-      - ONEZONE_IA
-      - STANDARD
-      - STANDARD_IA
-    Default: STANDARD
-  enableS3BucketLogging:
-    Type: String
-    Description: https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "No"
+Remote Administration
+- `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from network. Default is `0.0.0.0/0`. 
+- `ingressIPv6`: allowed IPv6 source prefix to remote administration services. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
+- `allowSSHport`: allow inbound SSH. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
+- `installDCV`: install graphical desktop environment and [Amazon DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
+- `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 
-  externalS3Bucket:
-    Type: String
-    Description: https://console.aws.amazon.com/s3/home
-    Default: ""
-  externalS3BucketRegion:
-    Type: String
-    AllowedValues:
-      - af-south-1
-      - ap-east-1
-      - ap-northeast-1
-      - ap-northeast-2
-      - ap-northeast-3
-      - ap-south-1
-      - ap-south-2
-      - ap-southeast-1
-      - ap-southeast-2
-      - ap-southeast-3
-      - ap-southeast-4
-      - ap-southeast-5
-      - ap-southeast-7
-      - ca-central-1
-      - ca-west-1
-      - cn-north-1
-      - cn-northwest-1
-      - eu-central-1
-      - eu-central-2
-      - eu-north-1
-      - eu-south-1
-      - eu-south-2
-      - eu-west-1
-      - eu-west-2
-      - eu-west-3
-      - il-central-1
-      - me-central-1
-      - me-south-1
-      - mx-central-1
-      - sa-east-1
-      - us-east-1
-      - us-east-2
-      - us-gov-east-1
-      - us-gov-west-1
-      - us-west-1
-      - us-west-2
-    Default: us-east-1
-  externalS3BucketStorageClass:
-    Type: String
-    AllowedValues:
-      - GLACIER_IR
-      - INTELLIGENT_TIERING
-      - ONEZONE_IA
-      - STANDARD
-      - STANDARD_IA
-    Default: STANDARD
+   *SSH, DCV and Webmin inbound access are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes.*
 
-  volumeSize:
-    Type: Number
-    Description: https://github.com/nextcloud/server/issues/40539
-    MinValue: 10
-    MaxValue: 16384
-    Default: 65
-  volumeType:
-    Type: String
-    Description: https://aws.amazon.com/ebs/general-purpose/
-    AllowedValues:
-      - "gp3"
-      - "gp2"
-    Default: "gp3"
+Nextcloud
+- `adminUserName`: Nextcloud admin username. Default is `admin`
+- `phpVersion`: PHP version to install. Uses [Ondřej Surý](https://deb.sury.org/)'s [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) repository 
+- `databaseOption`: `MariaDB` or `MySQL`. Default is `MariaDB`
+- `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](#option-2-using-certbot-certbot-dns-route53-plugin) DNS plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
 
-  backupResource:
-    Type: String
-    AllowedValues:
-      - EC2
-      - S3
-      - ExternalStorage
-      - EC2-and-S3
-      - All
-      - none
-    Default: "EC2-and-S3"
-  scheduleExpression:
-    Type: String
-    AllowedPattern: ".+"
-    Default: "cron(0 1 ? * * *)"
-  scheduleExpressionTimezone: # https://nodatime.org/TimeZones?version=2024a&format=json
-    Type: String
-    AllowedValues:
-      - Africa/Abidjan
-      - Africa/Algiers
-      - Africa/Bissau
-      - Africa/Cairo
-      - Africa/Casablanca
-      - Africa/Ceuta
-      - Africa/El_Aaiun
-      - Africa/Johannesburg
-      - Africa/Juba
-      - Africa/Khartoum
-      - Africa/Lagos
-      - Africa/Maputo
-      - Africa/Monrovia
-      - Africa/Nairobi
-      - Africa/Ndjamena
-      - Africa/Sao_Tome
-      - Africa/Tripoli
-      - Africa/Tunis
-      - Africa/Windhoek
-      - America/Adak
-      - America/Anchorage
-      - America/Araguaina
-      - America/Argentina/Buenos_Aires
-      - America/Argentina/Catamarca
-      - America/Argentina/Cordoba
-      - America/Argentina/Jujuy
-      - America/Argentina/La_Rioja
-      - America/Argentina/Mendoza
-      - America/Argentina/Rio_Gallegos
-      - America/Argentina/Salta
-      - America/Argentina/San_Juan
-      - America/Argentina/San_Luis
-      - America/Argentina/Tucuman
-      - America/Argentina/Ushuaia
-      - America/Asuncion
-      - America/Bahia
-      - America/Bahia_Banderas
-      - America/Barbados
-      - America/Belem
-      - America/Belize
-      - America/Boa_Vista
-      - America/Bogota
-      - America/Boise
-      - America/Cambridge_Bay
-      - America/Campo_Grande
-      - America/Cancun
-      - America/Caracas
-      - America/Cayenne
-      - America/Chicago
-      - America/Chihuahua
-      - America/Ciudad_Juarez
-      - America/Costa_Rica
-      - America/Cuiaba
-      - America/Danmarkshavn
-      - America/Dawson
-      - America/Dawson_Creek
-      - America/Denver
-      - America/Detroit
-      - America/Edmonton
-      - America/Eirunepe
-      - America/El_Salvador
-      - America/Fort_Nelson
-      - America/Fortaleza
-      - America/Glace_Bay
-      - America/Goose_Bay
-      - America/Grand_Turk
-      - America/Guatemala
-      - America/Guayaquil
-      - America/Guyana
-      - America/Halifax
-      - America/Havana
-      - America/Hermosillo
-      - America/Indiana/Indianapolis
-      - America/Indiana/Knox
-      - America/Indiana/Marengo
-      - America/Indiana/Petersburg
-      - America/Indiana/Tell_City
-      - America/Indiana/Vevay
-      - America/Indiana/Vincennes
-      - America/Indiana/Winamac
-      - America/Inuvik
-      - America/Iqaluit
-      - America/Jamaica
-      - America/Juneau
-      - America/Kentucky/Louisville
-      - America/Kentucky/Monticello
-      - America/La_Paz
-      - America/Lima
-      - America/Los_Angeles
-      - America/Maceio
-      - America/Managua
-      - America/Manaus
-      - America/Martinique
-      - America/Matamoros
-      - America/Mazatlan
-      - America/Menominee
-      - America/Merida
-      - America/Metlakatla
-      - America/Mexico_City
-      - America/Miquelon
-      - America/Moncton
-      - America/Monterrey
-      - America/Montevideo
-      - America/New_York
-      - America/Nome
-      - America/Noronha
-      - America/North_Dakota/Beulah
-      - America/North_Dakota/Center
-      - America/North_Dakota/New_Salem
-      - America/Nuuk
-      - America/Ojinaga
-      - America/Panama
-      - America/Paramaribo
-      - America/Phoenix
-      - America/Port-au-Prince
-      - America/Porto_Velho
-      - America/Puerto_Rico
-      - America/Punta_Arenas
-      - America/Rankin_Inlet
-      - America/Recife
-      - America/Regina
-      - America/Resolute
-      - America/Rio_Branco
-      - America/Santarem
-      - America/Santiago
-      - America/Santo_Domingo
-      - America/Sao_Paulo
-      - America/Scoresbysund
-      - America/Sitka
-      - America/St_Johns
-      - America/Swift_Current
-      - America/Tegucigalpa
-      - America/Thule
-      - America/Tijuana
-      - America/Toronto
-      - America/Vancouver
-      - America/Whitehorse
-      - America/Winnipeg
-      - America/Yakutat
-      - Antarctica/Casey
-      - Antarctica/Davis
-      - Antarctica/Macquarie
-      - Antarctica/Mawson
-      - Antarctica/Palmer
-      - Antarctica/Rothera
-      - Antarctica/Troll
-      - Antarctica/Vostok
-      - Asia/Almaty
-      - Asia/Amman
-      - Asia/Anadyr
-      - Asia/Aqtau
-      - Asia/Aqtobe
-      - Asia/Ashgabat
-      - Asia/Atyrau
-      - Asia/Baghdad
-      - Asia/Baku
-      - Asia/Bangkok
-      - Asia/Barnaul
-      - Asia/Beirut
-      - Asia/Bishkek
-      - Asia/Chita
-      - Asia/Choibalsan
-      - Asia/Colombo
-      - Asia/Damascus
-      - Asia/Dhaka
-      - Asia/Dili
-      - Asia/Dubai
-      - Asia/Dushanbe
-      - Asia/Famagusta
-      - Asia/Gaza
-      - Asia/Hebron
-      - Asia/Ho_Chi_Minh
-      - Asia/Hong_Kong
-      - Asia/Hovd
-      - Asia/Irkutsk
-      - Asia/Jakarta
-      - Asia/Jayapura
-      - Asia/Jerusalem
-      - Asia/Kabul
-      - Asia/Kamchatka
-      - Asia/Karachi
-      - Asia/Kathmandu
-      - Asia/Khandyga
-      - Asia/Kolkata
-      - Asia/Krasnoyarsk
-      - Asia/Kuching
-      - Asia/Macau
-      - Asia/Magadan
-      - Asia/Makassar
-      - Asia/Manila
-      - Asia/Nicosia
-      - Asia/Novokuznetsk
-      - Asia/Novosibirsk
-      - Asia/Omsk
-      - Asia/Oral
-      - Asia/Pontianak
-      - Asia/Pyongyang
-      - Asia/Qatar
-      - Asia/Qostanay
-      - Asia/Qyzylorda
-      - Asia/Riyadh
-      - Asia/Sakhalin
-      - Asia/Samarkand
-      - Asia/Seoul
-      - Asia/Shanghai
-      - Asia/Singapore
-      - Asia/Srednekolymsk
-      - Asia/Taipei
-      - Asia/Tashkent
-      - Asia/Tbilisi
-      - Asia/Tehran
-      - Asia/Thimphu
-      - Asia/Tokyo
-      - Asia/Tomsk
-      - Asia/Ulaanbaatar
-      - Asia/Urumqi
-      - Asia/Ust-Nera
-      - Asia/Vladivostok
-      - Asia/Yakutsk
-      - Asia/Yangon
-      - Asia/Yekaterinburg
-      - Asia/Yerevan
-      - Atlantic/Azores
-      - Atlantic/Bermuda
-      - Atlantic/Canary
-      - Atlantic/Cape_Verde
-      - Atlantic/Faroe
-      - Atlantic/Madeira
-      - Atlantic/South_Georgia
-      - Atlantic/Stanley
-      - Australia/Adelaide
-      - Australia/Brisbane
-      - Australia/Broken_Hill
-      - Australia/Darwin
-      - Australia/Eucla
-      - Australia/Hobart
-      - Australia/Lindeman
-      - Australia/Lord_Howe
-      - Australia/Melbourne
-      - Australia/Perth
-      - Australia/Sydney
-      - CET
-      - CST6CDT
-      - EET
-      - EST
-      - EST5EDT
-      - Etc/GMT
-      - Etc/GMT+1
-      - Etc/GMT+10
-      - Etc/GMT+11
-      - Etc/GMT+12
-      - Etc/GMT+2
-      - Etc/GMT+3
-      - Etc/GMT+4
-      - Etc/GMT+5
-      - Etc/GMT+6
-      - Etc/GMT+7
-      - Etc/GMT+8
-      - Etc/GMT+9
-      - Etc/GMT-1
-      - Etc/GMT-10
-      - Etc/GMT-11
-      - Etc/GMT-12
-      - Etc/GMT-13
-      - Etc/GMT-14
-      - Etc/GMT-2
-      - Etc/GMT-3
-      - Etc/GMT-4
-      - Etc/GMT-5
-      - Etc/GMT-6
-      - Etc/GMT-7
-      - Etc/GMT-8
-      - Etc/GMT-9
-      - Etc/UTC
-      - Europe/Andorra
-      - Europe/Astrakhan
-      - Europe/Athens
-      - Europe/Belgrade
-      - Europe/Berlin
-      - Europe/Brussels
-      - Europe/Bucharest
-      - Europe/Budapest
-      - Europe/Chisinau
-      - Europe/Dublin
-      - Europe/Gibraltar
-      - Europe/Helsinki
-      - Europe/Istanbul
-      - Europe/Kaliningrad
-      - Europe/Kirov
-      - Europe/Kyiv
-      - Europe/Lisbon
-      - Europe/London
-      - Europe/Madrid
-      - Europe/Malta
-      - Europe/Minsk
-      - Europe/Moscow
-      - Europe/Paris
-      - Europe/Prague
-      - Europe/Riga
-      - Europe/Rome
-      - Europe/Samara
-      - Europe/Saratov
-      - Europe/Simferopol
-      - Europe/Sofia
-      - Europe/Tallinn
-      - Europe/Tirane
-      - Europe/Ulyanovsk
-      - Europe/Vienna
-      - Europe/Vilnius
-      - Europe/Volgograd
-      - Europe/Warsaw
-      - Europe/Zurich
-      - HST
-      - Indian/Chagos
-      - Indian/Maldives
-      - Indian/Mauritius
-      - MET
-      - MST
-      - MST7MDT
-      - PST8PDT
-      - Pacific/Apia
-      - Pacific/Auckland
-      - Pacific/Bougainville
-      - Pacific/Chatham
-      - Pacific/Easter
-      - Pacific/Efate
-      - Pacific/Fakaofo
-      - Pacific/Fiji
-      - Pacific/Galapagos
-      - Pacific/Gambier
-      - Pacific/Guadalcanal
-      - Pacific/Guam
-      - Pacific/Honolulu
-      - Pacific/Kanton
-      - Pacific/Kiritimati
-      - Pacific/Kosrae
-      - Pacific/Kwajalein
-      - Pacific/Marquesas
-      - Pacific/Nauru
-      - Pacific/Niue
-      - Pacific/Norfolk
-      - Pacific/Noumea
-      - Pacific/Pago_Pago
-      - Pacific/Palau
-      - Pacific/Pitcairn
-      - Pacific/Port_Moresby
-      - Pacific/Rarotonga
-      - Pacific/Tahiti
-      - Pacific/Tarawa
-      - Pacific/Tongatapu
-      - WET
-    Default: Etc/UTC
-  deleteAfterDays:
-    Type: Number
-    Default: 35
+S3
+- `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) for files in primary storage. Default is `STANDARD`
+- `enableS3bucketLogging`: enable [S3 server access logging](https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). Default is `No`
 
-Conditions:
-  useUbuntu2404x86: !Equals [!Ref osVersion, "Ubuntu 24.04 (x86_64)"]
-  useUbuntu2404arm64: !Equals [!Ref osVersion, "Ubuntu 24.04 (arm64)"]
-  useUbuntu2204x86: !Equals [!Ref osVersion, "Ubuntu 22.04 (x86_64)"]
-  useUbuntu2204arm64: !Equals [!Ref osVersion, "Ubuntu 22.04 (arm64)"]
-  useUbuntuPro2404x86: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (x86_64)"]
-  useUbuntuPro2404arm64: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (arm64)"]
-  useUbuntuPro2204x86: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (x86_64)"]
 
-  useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
-  displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
-  enableProtection: !Equals [!Ref ec2TerminationProtection, "Yes"]
-  hasEIC:
-    !Not [
-      !Equals [
-        !FindInMap [
-          EICprefixMap,
-          !Ref AWS::Region,
-          IpPrefix,
-          DefaultValue: 127.0.0.1/32,
-        ],
-        127.0.0.1/32,
-      ],
-    ]
-  createSgEIC: !And [!Condition hasEIC, !Condition displayPublicIP]
-  createSgSSH: !Equals [!Ref allowSSHport, "Yes"]
+S3 External Storage
+- `externalS3Bucket` (optional): option to mount existing S3 bucket within Nextcloud as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html). Specify bucket name in your account
+- `externalS3BucketRegion`: [AWS Region](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-regions) where `externalS3Bucket` is located
+- `externalS3BucketStorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html)
 
-  installDCV: !Equals [!Ref installDCV, "Yes"]
-  noDCV: !Not [!Condition installDCV]
-  installWebmin: !Equals [!Ref installWebmin, "Yes"]
-  hasR53Zone: !Not [!Equals [!Ref r53ZoneID, ""]]
+EBS
+- `volumeSize`: [Amazon EBS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html) volume size
+- `volumeType`: [EBS General Purpose Volume](https://aws.amazon.com/ebs/general-purpose/) type
 
-  enableS3BucketLogging: !Equals [!Ref enableS3BucketLogging, "Yes"]
-  noS3BucketLogging: !Not [!Condition enableS3BucketLogging]
-  externalS3Bucket: !Not [!Equals [!Ref externalS3Bucket, ""]]
+AWS Backup
+- `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. [Versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) must be enabled on S3 bucket mounted as external storage before [AWS Backup](https://docs.aws.amazon.com/AmazonS3/latest/userguide/backup-for-s3.html) can back it up. Default is `EC2-and-S3` 
+- `scheduleExpression`: CRON expression specifying when AWS Backup initiates a backup job. Default is `cron(0 1 ? * * *)`
+- `scheduleExpressionTimezone`: timezone in which the schedule expression is set. Default is `Etc/UTC`
+- `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `35` days
 
-  backupEC2:
-    !Or [
-      !Equals [!Ref backupResource, "EC2"],
-      !Or [
-        !Equals [!Ref backupResource, "EC2-and-S3"],
-        !Equals [!Ref backupResource, "All"],
-      ],
-    ]
-  backupS3:
-    !Or [
-      !Equals [!Ref backupResource, "S3"],
-      !Or [
-        !Equals [!Ref backupResource, "EC2-and-S3"],
-        !Equals [!Ref backupResource, "All"],
-      ],
-    ]
-  backupExternalStorage:
-    !And [
-      !Condition externalS3Bucket,
-      !Or [
-        !Equals [!Ref backupResource, "ExternalStorage"],
-        !Equals [!Ref backupResource, "All"],
-      ],
-    ]
-  createBackup:
-    !Or [
-      !Condition backupEC2,
-      !Or [!Condition backupS3, !Condition backupExternalStorage],
-    ]
 
-Mappings:
-  EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
-    af-south-1:
-      IpPrefix: 13.244.121.196/30
-      Ipv6Prefix: 2406:da11:700:3b00::/56
-    ap-east-1:
-      IpPrefix: 43.198.192.104/29
-      Ipv6Prefix: 2406:da1e:da1:3c00::/56
-    ap-northeast-1:
-      IpPrefix: 3.112.23.0/29
-      Ipv6Prefix: 2406:da14:1c18:2100::/56
-    ap-northeast-2:
-      IpPrefix: 13.209.1.56/29
-      Ipv6Prefix: 2406:da12:1e1:d900::/56
-    ap-northeast-3:
-      IpPrefix: 15.168.105.160/29
-      Ipv6Prefix: 2406:da16:856:a500::/56
-    ap-south-1:
-      IpPrefix: 13.233.177.0/29
-      Ipv6Prefix: 2406:da1a:74a:4b00::/56
-    ap-south-2:
-      IpPrefix: 18.60.252.248/29
-      Ipv6Prefix: 2406:da1b:d1d:8800::/56
-    ap-southeast-1:
-      IpPrefix: 3.0.5.32/29
-      Ipv6Prefix: 2406:da18:752:6600::/56
-    ap-southeast-2:
-      IpPrefix: 13.239.158.0/29
-      Ipv6Prefix: 2406:da1c:90e:4a00::/56
-    ap-southeast-3:
-      IpPrefix: 43.218.193.64/29
-      Ipv6Prefix: 2406:da19:14b:8c00::/56
-    ap-southeast-4:
-      IpPrefix: 16.50.248.80/29
-      Ipv6Prefix: 2406:da1f:b4f:4600::/56
-    ca-central-1:
-      IpPrefix: 35.183.92.176/29
-      Ipv6Prefix: 2600:1f11:ae3:700::/56
-    ca-west-1:
-      IpPrefix: 40.176.213.168/29
-      Ipv6Prefix: 2600:1f1a:4ff6:d500::/56
-    cn-north-1:
-      IpPrefix: 43.196.20.40/29
-      Ipv6Prefix: 2400:7fc0:86fd:e00::/56
-    cn-northwest-1:
-      IpPrefix: 43.192.155.8/29
-      Ipv6Prefix: 2404:c2c0:87aa:4800::/56
-    eu-central-1:
-      IpPrefix: 3.120.181.40/29
-      Ipv6Prefix: 2a05:d014:17a8:8b00::/56
-    eu-central-2:
-      IpPrefix: 16.63.77.8/29
-      Ipv6Prefix: 2a05:d019:1d6:2100::/56
-    eu-north-1:
-      IpPrefix: 13.48.4.200/30
-      Ipv6Prefix: 2a05:d016:494:f00::/56
-    eu-south-1:
-      IpPrefix: 15.161.135.164/30
-      Ipv6Prefix: 2a05:d01a:c03:4a00::/56
-    eu-south-2:
-      IpPrefix: 18.101.90.48/29
-      Ipv6Prefix: 2a05:d011:cbe:f700::/56
-    eu-west-1:
-      IpPrefix: 18.202.216.48/29
-      Ipv6Prefix: 2a05:d018:403:4e00::/56
-    eu-west-2:
-      IpPrefix: 3.8.37.24/29
-      Ipv6Prefix: 2a05:d01c:4ac:3100::/56
-    eu-west-3:
-      IpPrefix: 35.180.112.80/29
-      Ipv6Prefix: 2a05:d012:c9e:d600::/56
-    il-central-1:
-      IpPrefix: 51.16.183.224/29
-      Ipv6Prefix: 2a05:d025:451:7d00::/56
-    me-central-1:
-      IpPrefix: 3.29.147.40/29
-      Ipv6Prefix: 2406:da17:1db:b00::/56
-    me-south-1:
-      IpPrefix: 16.24.46.56/29
-      Ipv6Prefix: 2a05:d01e:27f:ac00::/56
-    sa-east-1:
-      IpPrefix: 18.228.70.32/29
-      Ipv6Prefix: 2600:1f1e:d1d:e700::/56
-    us-east-1:
-      IpPrefix: 18.206.107.24/29
-      Ipv6Prefix: 2600:1f18:6fe3:8c00::/56
-    us-east-2:
-      IpPrefix: 3.16.146.0/29
-      Ipv6Prefix: 2600:1f16:138f:cf00::/56
-    us-gov-east-1:
-      IpPrefix: 18.252.4.0/30
-      Ipv6Prefix: 2600:1f15:d63:bd00::/56
-    us-gov-west-1:
-      IpPrefix: 15.200.28.80/30
-      Ipv6Prefix: 2600:1f12:fa9:5100::/56
-    us-west-1:
-      IpPrefix: 13.52.6.112/29
-      Ipv6Prefix: 2600:1f1c:12d:e900::/56
-    us-west-2:
-      IpPrefix: 18.237.140.160/29
-      Ipv6Prefix: 2600:1f13:a0d:a700::/56
+It may take more than 30 minutes to provision the entire stack. After your stack has been successfully created, its status changes to **CREATE_COMPLETE**.
 
-Resources:
-  instanceIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: [ec2.amazonaws.com]
-            Action: [sts:AssumeRole]
-      Path: /
-      Policies:
-        - PolicyName: Nextcloud-S3PrimaryStoragePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:*
-                Resource:
-                  - !If [
-                      noS3BucketLogging,
-                      !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}",
-                      !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}",
-                    ]
-                  - !If [
-                      noS3BucketLogging,
-                      !Sub "arn:${AWS::Partition}:s3:::${s3Bucket}/*",
-                      !Sub "arn:${AWS::Partition}:s3:::${s3BucketWithLogging}/*",
-                    ]
-                Condition:
-                  IpAddress:
-                    aws:SourceIp: 0.0.0.0/0
-        - !If
-          - installDCV
-          - PolicyName: dcvLicensing
-            PolicyDocument: # https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-license.html
-              Version: "2012-10-17"
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - s3:GetObject
-                  Resource: !Sub arn:*:s3:::dcv-license.${AWS::Region}/*
-          - !Ref AWS::NoValue
-        - !If
-          - hasR53Zone
-          - PolicyName: Route53CertbotAccess
-            PolicyDocument: # Certbot dns_route53 : https://certbot-dns-route53.readthedocs.io/en/stable/
-              Version: "2012-10-17"
-              Statement: # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/specifying-rrset-conditions.html
-                - Effect: Allow
-                  Action:
-                    - route53:ListHostedZones
-                    - route53:GetChange
-                  Resource: "*"
-                - Effect: Allow
-                  Action:
-                    - route53:ChangeResourceRecordSets
-                  Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/${r53ZoneID}
-                  Condition:
-                    IpAddress:
-                      aws:SourceIp: 0.0.0.0/0
-                    ForAllValues:StringEquals:
-                      route53:ChangeResourceRecordSetsRecordTypes: [TXT]
-                    ForAllValues:StringLike:
-                      route53:ChangeResourceRecordSetsNormalizedRecordNames:
-                        [_acme-challenge.*]
-          - !Ref AWS::NoValue
-      ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy"
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
 
-  instanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Path: /
-      Roles:
-        - !Ref instanceIamRole
+## CloudFormation Outputs
+The following are available in **Outputs** section 
 
-  securityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow inbound HTTP, HTTPS and any remote admin ports
-      VpcId: !Ref vpcID
-      SecurityGroupIngress:
-        - !If
-          - installWebmin
-          - Description: Webmin (IPv4)
-            IpProtocol: tcp
-            FromPort: 10000
-            ToPort: 10000
-            CidrIp: !Ref ingressIPv4
-          - !Ref AWS::NoValue
-        - !If
-          - installWebmin
-          - Description: Webmin (IPv6)
-            IpProtocol: tcp
-            FromPort: 10000
-            ToPort: 10000
-            CidrIpv6: !Ref ingressIPv6
-          - !Ref AWS::NoValue
-        - !If
-          - createSgSSH
-          - Description: SSH (IPv4)
-            IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIp: !Ref ingressIPv4
-          - !Ref AWS::NoValue
-        - !If
-          - createSgSSH
-          - Description: SSH (IPv6)
-            IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIpv6: !Ref ingressIPv6
-          - !Ref AWS::NoValue
-        - !If
-          - installDCV
-          - Description: DCV (IPv4)
-            IpProtocol: tcp
-            FromPort: 8443
-            ToPort: 8443
-            CidrIp: !Ref ingressIPv4
-          - !Ref AWS::NoValue
-        - !If
-          - installDCV
-          - Description: DCV (IPv6)
-            IpProtocol: tcp
-            FromPort: 8443
-            ToPort: 8443
-            CidrIpv6: !Ref ingressIPv6
-          - !Ref AWS::NoValue
-        - !If
-          - installDCV
-          - Description: DCV QUIC (IPv4)
-            IpProtocol: udp
-            FromPort: 8443
-            ToPort: 8443
-            CidrIp: !Ref ingressIPv4
-          - !Ref AWS::NoValue
-        - !If
-          - installDCV
-          - Description: DCV QUIC (IPv6)
-            IpProtocol: udp
-            FromPort: 8443
-            ToPort: 8443
-            CidrIpv6: !Ref ingressIPv6
-          - !Ref AWS::NoValue
-        - Description: HTTP (IPv4)
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - Description: HTTP (IPv6)
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIpv6: ::/0
-        - Description: HTTPS (IPv4)
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-        - Description: HTTPS (IPv6)
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIpv6: ::/0
-        - !If
-          - createSgEIC
-          - Description: SSH (EC2 Instance Connect IPv4)
-            IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIp: !FindInMap [EICprefixMap, !Ref AWS::Region, IpPrefix]
-          - !Ref AWS::NoValue
-        - !If
-          - createSgEIC
-          - Description: SSH (EC2 Instance Connect IPv6)
-            IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIpv6: !FindInMap [EICprefixMap, !Ref AWS::Region, Ipv6Prefix]
-          - !Ref AWS::NoValue
-      SecurityGroupEgress:
-        - Description: Allow all outbound traffic (IPv4)
-          IpProtocol: "-1"
-          CidrIp: 0.0.0.0/0
-        - Description: Allow all outbound traffic (IPv6)
-          IpProtocol: "-1"
-          CidrIpv6: ::/0
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: Name
-          Value: !Sub
-            - "${AWS::StackName}-securityGroup-${UID}"
-            - UID:
-                !Select [
-                  3,
-                  !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-                ]
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
+- `DCVwebConsole` (if `installDCV` is `Yes`): DCV web browser console URL link. Login as `ubuntu`. Set user password by running `sudo passwd ubuntu` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
+- `EC2console`: EC2 console URL link to your EC2 instance
+- `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
+- `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
+- `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password)
+- `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
+- `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
+- `WebUrl`: EC2 web server URL link
 
-  iamUser:
-    Type: AWS::IAM::User
-    Properties:
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
 
-  iamGroup:
-    Type: AWS::IAM::Group
-    Properties:
+## Using Nextcloud
 
-  iamS3ExternalStoragePolicy:
-    Type: AWS::IAM::GroupPolicy
-    Condition: externalS3Bucket
-    Properties:
-      GroupName: !Ref iamGroup
-      PolicyName: !Sub
-        - "${AWS::StackName}-iamS3ExternalStoragePolicy-${UID}"
-        - UID:
-            !Select [
-              3,
-              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-            ]
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action:
-              - s3:PutObject
-              - s3:GetObject
-              - s3:GetObjectAttributes
-              - s3:ListBucket
-              - s3:GetBucketVersioning
-              - s3:DeleteObject
-              - s3:AbortMultipartUpload
-            Resource:
-              - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}"
-              - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}/*"
-            Condition:
-              IpAddress:
-                aws:SourceIp: 0.0.0.0/0
+### Nextcloud admin user password
+Use either EC2 instance connect or SSM session manager URL link to obtain in-browser terminal access to your EC2 instance. Copy and paste `SetPasswordCmd` value to set Nextcloud admin password. For example, if `adminUserName` value is `admin`, the command is
 
-  iamUserToGroup:
-    Type: AWS::IAM::UserToGroupAddition
-    Properties:
-      GroupName: !Ref iamGroup
-      Users:
-        - !Ref iamUser
+```
+sudo -u www-data php /var/www/html/occ user:resetpassword admin
+```
+After which, you can login to your Nextcloud application using `WebUrl` link or proceed to install a HTTPS certificate.
 
-  userAccessKey:
-    Type: AWS::IAM::AccessKey
-    Properties:
-      UserName: !Ref iamUser
 
-  s3Bucket:
-    Type: AWS::S3::Bucket
-    Condition: noS3BucketLogging
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: Delete-Incomplete-Multipart-Uploads
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 35
-            Status: Enabled
-          - Id: Delete-Previous-Versions
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 1
-            Status: Enabled
-          - Id: Delete-Expired-Delete-Marker
-            ExpiredObjectDeleteMarker: true
-            Status: Enabled
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
+### Obtaining certificate for HTTPS using Certbot 
+The EC2 instance uses a self-signed certificate for HTTPS. You can use [Certbot](https://certbot.eff.org/pages/about) to automatically obtain and install [Let's Encrypt](https://letsencrypt.org/) certificate on your web server.
 
-  s3BucketWithLogging:
-    Type: AWS::S3::Bucket
-    Condition: enableS3BucketLogging
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: Delete-Incomplete-Multipart-Uploads
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 35
-            Status: Enabled
-          - Id: Delete-Previous-Versions
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 1
-            Status: Enabled
-          - Id: Delete-Expired-Delete-Marker
-            ExpiredObjectDeleteMarker: true
-            Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref logBucket
-        LogFilePrefix: !Sub "${AWS::StackName}/"
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
+#### Prerequisites
+Ensure you have a domain name whose DNS entry resolves to your EC2 instance IP address. If you do not have a domain, you can [register a new domain](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) using [Amazon Route 53](https://aws.amazon.com/route53/) and [create a DNS A record](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-creating.html).
 
-  s3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !If [noS3BucketLogging, !Ref s3Bucket, !Ref s3BucketWithLogging]
-      PolicyDocument:
-        Statement:
-          - Effect: Deny
-            Action:
-              - s3:*
-            Condition:
-              Bool:
-                "aws:SecureTransport": "false"
-            Principal: "*"
-            Resource:
-              !If [
-                noS3BucketLogging,
-                !Sub "${s3Bucket.Arn}/*",
-                !Sub "${s3BucketWithLogging.Arn}/*",
-              ]
+#### Option 1: Using Certbot Apache plugin
+This option requires your domain name to resolve to your EC2 instance *public internet* IP address. From terminal, run the below command
+```
+sudo certbot --apache
+```
 
-  logBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: enableS3BucketLogging
-    Properties:
-      Bucket: !Ref logBucket
-      PolicyDocument: # https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: logging.s3.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub "${logBucket.Arn}/*"
-            Condition:
-              StringEquals:
-                aws:SourceAccount: !Ref AWS::AccountId
+#### Option 2: Using Certbot certbot-dns-route53 plugin
+The [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/en/stable/) option requires your DNS to be hosted by Route 53. It supports wildcard certificates and domain names that resolve to private IP addresses. Ensure that Route 53 zone access is granted by specifying `r53ZoneID` value.  From terminal, run the below command
+```
+sudo certbot --dns-route53 --installer apache
+```
 
-  logBucket:
-    Type: AWS::S3::Bucket
-    Condition: enableS3BucketLogging
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
+Follow instructions to have Certbot request and install certificate on your web server. Refer to Certbot site for [help](https://certbot.eff.org/pages/help) with this tool.  
 
-  ec2Instance:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT120M
-    Metadata:
-      Comment: Install Update files
-      AWS::CloudFormation::Init:
-        configSets:
-          setup:
-            - 00_setup
-          dcv_install:
-            - 00_dcv_install
-          nextcloud_install:
-            - 10_nextcloud_install
-        00_setup: # in the following order: packages, groups, users, sources, files, commands, and then services.
-          files:
-            "/home/ubuntu/update-dcv":
-              content: |
-                #!/bin/bash
-                cd /tmp
-                OS_VERSION=$(. /etc/os-release;echo $VERSION_ID | sed -e 's/\.//g')
-                sudo rm -f /tmp/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
-                wget https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
-                tar -xvzf nice-dcv-ubuntu$OS_VERSION-$(arch).tgz && cd nice-dcv-*-ubuntu$OS_VERSION-$(arch)
-                sudo apt-get install -y ./nice-dcv-server_*.deb
-                sudo apt-get install -y ./nice-dcv-web-viewer_*.deb
-                sudo apt-get install -y ./nice-xdcv_*.deb
-                sudo systemctl daemon-reload
-              mode: "000755"
-              owner: "ubuntu"
-              group: "ubuntu"
-            "/home/ubuntu/update-awscli":
-              content: |
-                #!/bin/bash
-                cd /tmp
-                sudo rm -f /tmp/awscliv2.zip
-                curl https://awscli.amazonaws.com/awscli-exe-linux-$(arch).zip -o awscliv2.zip
-                unzip -q -o awscliv2.zip
-                /usr/bin/aws --version
-                sudo ./aws/install --update -b /usr/bin
-                /usr/bin/aws --version
-              mode: "000755"
-              owner: "ubuntu"
-              group: "ubuntu"
-            "/etc/systemd/system/dcv-virtual-session.service":
-              content: |
-                [Unit]
-                Description=Create DCV virtual session
-                After=default.target network.target
+#### Configure HSTS
+To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security) headers, edit `*ssl.conf` file in `/etc/apache2/sites-available/` folder and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
 
-                [Service]
-                ExecStart=/opt/dcv-virtual-session.sh
+```
+    <IfModule mod_headers.c>
+      Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains"
+    </IfModule>
+```
+Verify Apache configuration
+```
+sudo apachetl -t
+```
 
-                [Install]
-                WantedBy=default.target
-              mode: "000644"
-              owner: "root"
-              group: "root"
-            "/opt/dcv-virtual-session.sh":
-              content: |
-                #!/bin/bash
-                dcvUsers=( "ubuntu" )
-                while true;
-                do
-                  for dcvUser in "${dcvUsers[@]}"
-                  do
-                    if (! /usr/bin/dcv list-sessions | grep -q $dcvUser); then
-                      /usr/bin/dcv create-session $dcvUser --owner $dcvUser --storage-root %home% --type virtual
-                    fi
-                  done
-                  date
-                  /usr/bin/dcv list-sessions
-                  sleep 5
-                done
-              mode: "000744"
-              owner: "root"
-              group: "root"
-            "/etc/systemd/system/dcv-post-reboot.service":
-              content: |
-                [Unit]
-                Description=Post install tasks
-                After=default.target network.target
+Reload Apache server
+``` 
+sudo systemctl reload apache2
+```
 
-                [Service]
-                ExecStart=/bin/sh -c "/opt/dcv-post-reboot.sh 2>&1 | tee -a /var/log/install-sw.log"
+### Troubleshooting
+To troubleshoot any installation issue, you can view contents of the following log files
+- `/var/log/cloud-init-output.log`
+- `/var/log/install-cfn-helper.log`
+- `/var/log/install-sw.log`
+- `/var/log/install-dcv.log`
+- `/var/log/install-nextcloud.log`
 
-                [Install]
-                WantedBy=default.target
-              mode: "000644"
-              owner: "root"
-              group: "root"
-            "/opt/dcv-post-reboot.sh":
-              content: !Sub |
-                #!/bin/bash
-                sysctl -w net.ipv6.conf.all.disable_ipv6=1
-                sysctl -w net.ipv6.conf.default.disable_ipv6=1
-                export DEBIAN_FRONTEND=noninteractive
+## Managing and using Nextcloud
 
-                python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
+### Sending email
+Nextcloud supports [email server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html) for password reset and activity notifications. You can configure Nextcloud to use [external SMTP server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-an-smtp-server) (e.g. [Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/send-email-smtp.html)), or [sendmail](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-sendmail-qmail).
 
-                apt-get update
-                apt-get upgrade -q -y
+When configuring external SMTP server, use 465, 587 or supported port number that is not 25. Amazon EC2 [restricts](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-resource-limits.html#port-25-throttle) email sending using port 25 on all instances by default. You can request that this restriction be removed if you are using port 25 for external SMTP server or sendmail. Refer to [How do I remove the restriction on port 25 from my Amazon EC2 instance or Lambda function?](https://repost.aws/knowledge-center/ec2-port-25-throttle) for more information.
 
-                sysctl -w net.ipv6.conf.all.disable_ipv6=0
-                sysctl -w net.ipv6.conf.default.disable_ipv6=0
+### Using the occ command
+The [occ](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/occ_command.html) command is Nextcloud's command-line interface. It is used to perform common server operations such as installing and upgrading Nextcloud, and must be run as HTTP user, i.e. `sudo -u www-data php /var/www/html/occ`. On the EC2 instance, you can use the alias `nextcloud.occ`.
 
-                # DCV?
-                export installDCV="${installDCV}"
-                case $installDCV in
-                  Yes)
-                    systemctl enable dcv-virtual-session && systemctl restart dcv-virtual-session
-                    systemctl enable dcvserver && systemctl restart dcvserver
-                    ;;
-                  No)
-                    rm -f /etc/systemd/system/dcv-virtual-session.service
-                    rm -f /opt/dcv-virtual-session.sh
-                    rm -f /home/ubuntu/update-dcv
-                    ;;
-                esac
+### Mounting external storage services as external storage
+Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount external storage services including Windows file servers and S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html#available-storage-backends) for details.
 
-                rm -f /etc/systemd/system/dcv-post-reboot.service
-                rm -f ${!0}
-                systemctl daemon-reload
-              mode: "000755"
-              owner: "root"
-              group: "root"
-            "/opt/aws/amazon-cloudwatch-agent/bin/config.json":
-              content: |
-                {
-                    "agent": {
-                        "metrics_collection_interval": 60,
-                        "run_as_user": "cwagent"
-                    },
-                    "logs": {
-                      "logs_collected": {
-                        "files": {
-                          "collect_list": [
-                            {
-                              "file_path": "/var/www/html/data/nextcloud.log",
-                              "log_group_class": "STANDARD",
-                              "log_group_name": "nextcloud.log",
-                              "log_stream_name": "{instance_id}",
-                              "retention_in_days": 180
-                            }
-                          ]
-                        }
-                      }
-                    },
-                    "metrics": {
-                        "namespace": "CWAgent",
-                        "append_dimensions": {
-                            "InstanceId": "${aws:InstanceId}"
-                        },
-                        "metrics_collected": {
-                            "mem": {
-                                "measurement": [
-                                    "used_percent"
-                                ]
-                            }
-                        }
-                    }
-                }
-              mode: "000644"
-              owner: "root"
-              group: "root"
-            "/root/install-sw.sh":
-              content: !Sub |
-                #!/bin/bash
-                mkdir -p /tmp/cfn
-                cd /tmp/cfn
+### Downloads
+Desktop and mobile applications download links are available from [Nextcloud Install](https://nextcloud.com/install/#install-clients) page.
 
-                # Update OS
-                apt-get update -q
-                apt-get upgrade -q -y
-                apt-get autoremove -q -y
+### Documentation
+[Administration guide](https://docs.nextcloud.com/server/stable/admin_manual/) and [user manual](https://docs.nextcloud.com/server/stable/user_manual/en/) are available from Nextcloud [documentation site](https://docs.nextcloud.com/). 
 
-                # CloudWatch agent: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-commandline-fleet.html#download-CloudWatch-Agent-on-EC2-Instance-commandline-fleet
-                if (arch | grep -q x86); then
-                  curl -s -L -O https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-                else
-                  curl -s -L -O https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/arm64/latest/amazon-cloudwatch-agent.deb
-                fi
-                apt-get install -q -y ./amazon-cloudwatch-agent.deb
-                /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
-                systemctl enable --now amazon-cloudwatch-agent
+### Further information
+Nextcloud is mentioned by the following blog posts
+- [Scale your Nextcloud with Storage on Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/blogs/opensource/scale-your-nextcloud-with-storage-on-amazon-simple-storage-service-amazon-s3/)
+- [Advanced Nextcloud Workflows with Amazon Simple Storage Service (Amazon S3)](https://aws.amazon.com/blogs/opensource/advanced-nextcloud-workflows-with-storage-on-amazon-simple-storage-service-amazon-s3-2/)
 
-                # Webmin: https://webmin.com/download/
-                export webmin="${installWebmin}"
-                case $webmin in
-                  Yes)
-                    cd /tmp/cfn
-                    curl -s -L -O https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
-                    echo 'Y' | sh ./setup-repos.sh -f
-                    apt-get install -q -y webmin --install-recommends
-                    ;;
-                esac
 
-                # USB and GPU driver DKMS
-                apt-get update
-                apt-get install -q -y dkms
 
-                # Kernel headers for GPU and USB remotization
-                apt-get install -q -y linux-headers-aws
-                apt-get install -q -y linux-modules-extra-aws
-                apt-get install -q -y usbutils
-                # AWS CLI: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-                apt-get remove -q -y awscli
-                sudo snap install aws-cli --classic
-                if [ -e /snap/bin/aws ]; then
-                  rm -f /home/ubuntu/update-awscli
-                else
-                  /home/ubuntu/update-awscli
-                fi
-                echo "export AWS_CLI_AUTO_PROMPT=on-partial" >> /home/ubuntu/.bashrc
+## Data protection
 
-                # Certbot: https://eff-certbot.readthedocs.io/en/stable/install.html#snap-recommended
-                sudo snap install certbot --classic
-                ln -s /snap/bin/certbot /usr/bin/certbot
-                sudo snap set certbot trust-plugin-with-root=ok
-                sudo snap install certbot-dns-route53
+### S3 primary storage
+Amazon S3 is used to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) provides [performance benefits](
+https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), including support for [large file uploads](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html#large-file-upload-on-object-storage).
 
-                rm -f ${!0}
-              mode: "000740"
-              owner: "root"
-              group: "root"
-          commands:
-            install:
-              command: "/root/install-sw.sh >> /var/log/install-sw.log 2>&1"
-              ignoreErrors: "true"
-        00_dcv_install:
-          files:
-            "/root/install-dcv.sh":
-              content: !Sub |
-                #!/bin/bash
-                mkdir -p /tmp/cfn
-                cd /tmp/cfn
+Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
 
-                # Update OS
-                apt-get update -q
-                apt-get upgrade -q -y
+### Restoring from backup
+If you enable AWS Backup, you can restore your [EC2 instance](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html) and [S3 data](https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-s3.html) from recovery points (backups) in your [backup vault](https://docs.aws.amazon.com/aws-backup/latest/devguide/vaults.html). The CloudFormation template creates an IAM role that grants AWS Backup permission to restore your backups. Role name can be located in your CoudFormation stack Resources section where Logical ID is `backupRestoreRole`.
 
-                # DCV prereq: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-prereq.html
-                apt-get install -q -y ubuntu-desktop-minimal
-                apt-get install -q -y gdm3
-                apt-get install -q -y amazon-ec2-utils
+### Recovery points protection
+To protect recovery points from inadvertent or malicious deletions, you can enable [AWS Backup Vault Lock](https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html) in compliance mode to provide immutable WORM (write-once, read-many) backups. Vaults that are locked in compliance mode *cannot be deleted* once the cooling-off period ("grace time") expires if any recovery points are in the vault. Refer to [Protecting data with AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/protecting-data-with-aws-backup-vault-lock/) for more information. 
 
-                # Disable the Wayland protocol: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-prereq.html#linux-prereq-wayland
-                sed -i '/^\[daemon\]/a WaylandEnable=false' /etc/gdm3/custom.conf
+### Filter IAM policy source IP
+Nextcloud server uses [EC2 IAM role](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) for S3 primary storage access. If `assignStaticIP` is `Yes`, you can limit access to only your Nextcloud server. This ensures that even when the session credentials are stolen, an attacker cannot directly use it to access files from his own address.
 
-                # resolve "/var/lib/dpkg/info/nice-dcv-server.postinst: 8: dpkg-architecture: not found" when installing dcv-server
-                apt-get install -q -y dpkg-dev
+The created IAM role can be located in CloudFormation console stack **Resources** section with `Logical ID` of **instanceIamRole**. Click on the `Physical ID` value to edit inline permission in IAM console. Change `aws:SourceIp` value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
-                # Microphone redirection: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-server.html
-                apt-get install -q -y pulseaudio-utils
-                apt-get install -q -y gnome-tweaks gnome-shell-extension-ubuntu-dock
-                apt-get install -q -y gnome-shell-extension-manager
-
-                # DCV: https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-linux-server.html
-                curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/NICE-GPG-KEY
-                gpg --import NICE-GPG-KEY
-                OS_VERSION=$(. /etc/os-release;echo $VERSION_ID | sed -e 's/\.//g')
-                curl -s -L -O https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-ubuntu$OS_VERSION-$(arch).tgz
-                tar -xvzf nice-dcv-ubuntu*.tgz && cd nice-dcv-*-$(arch)
-                apt-get install -q -y ./nice-dcv-server_*.deb
-                apt-get install -q -y ./nice-dcv-web-viewer_*.deb
-                usermod -aG video dcv
-                apt-get install -q -y ./nice-xdcv_*.deb
-
-                # Printer redirection: https://docs.aws.amazon.com/dcv/latest/adminguide/manage-printer.html
-                apt-get install -q -y cups
-                GROUP=$(cat /etc/cups/cups-files.conf | grep -oP "SystemGroup\s\K\w+")
-                usermod -a -G $GROUP dcv
-                systemctl enable cups
-
-                # QUIC: https://docs.aws.amazon.com/dcv/latest/adminguide/enable-quic.html
-                cp /etc/dcv/dcv.conf /etc/dcv/dcv.conf."`date +"%Y-%m-%d"`"
-                sed -i "s/^#enable-quic-frontend=true/enable-quic-frontend=true/g" /etc/dcv/dcv.conf
-
-                # Higher web client max resolution: https://docs.aws.amazon.com/dcv/latest/adminguide/config-param-ref.html
-                sed -i "/^\[display/a web-client-max-head-resolution=(4096, 2160)" /etc/dcv/dcv.conf
-                # Console session support
-                sed -i "/^\[session-management\/automatic-console-session/a owner=\"ubuntu\"\nstorage-root=\"%home%\"" /etc/dcv/dcv.conf
-
-                # Disable reporting : https://wiki.ubuntu.com/Apport
-                sed -i "s/enabled=1/enable=0/g" /etc/default/apport
-                apt-get remove -q -y ubuntu-report whoopsie apport
-                apt-get autoremove -q -y
-
-                rm -f ${!0}
-              mode: "000740"
-              owner: "root"
-              group: "root"
-            "/home/ubuntu/.gnomerc":
-              content: |
-                export XDG_CURRENT_DESKTOP=ubuntu:GNOME
-                export GNOME_SHELL_SESSION_MODE=ubuntu
-                export XDG_DATA_DIRS=/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop
-              mode: "000644"
-              owner: "ubuntu"
-              group: "ubuntu"
-          commands:
-            install:
-              command: "/root/install-dcv.sh > /var/log/install-dcv.log 2>&1"
-              ignoreErrors: "true"
-        10_nextcloud_install:
-          files:
-            "/root/install-nextcloud.sh":
-              content: !Sub |
-                #!/bin/bash
-                mkdir -p /tmp/cfn
-                cd /tmp/cfn
-
-                export PHP="${phpVersion}"
-                export PHP_VERSION=`echo ${phpVersion} | cut -c 4-7`
-
-                # Resolve imagick no SVG support security warning
-                apt-get install -q -y libmagickcore-*-extra
-
-                # PHP from Ondrej repo: https://deb.sury.org/
-                apt-get install -q -y ca-certificates apt-transport-https software-properties-common lsb-release
-                add-apt-repository -y ppa:ondrej/php
-                add-apt-repository -y ppa:ondrej/apache2
-
-                # PHP and Apache install
-                apt-get install -q -y ${phpVersion} ${phpVersion}-{common,fpm,opcache,apcu,cgi} apache2 libapache2-mod-fcgid
-                # https://docs.nextcloud.com/server/latest/admin_manual/installation/php_configuration.html
-                apt-get install -q -y ${phpVersion}-{xml,xmlrpc,xsl,soap,ldap,zip,bz2,intl,curl,mbstring,bcmath,imagick,gd}
-                apt-get install -q -y ${phpVersion}-{memcached,redis,mysql}
-                apt-get install -q -y ${phpVersion}-{igbinary,msgpack,zstd,lz4,bz2}
-                apt-get install -q -y ${phpVersion}-{smbclient,gmp}
-                apt-get install -q -y ${phpVersion}-ldap
-
-                # Redis for caching and session state
-                apt-get install -q -y redis-server
-                systemctl enable --now redis-server
-                # Enable unix socket
-                sed -i "/unixsocketperm/a unixsocket \/var\/run\/redis\/redis-server.sock\nunixsocketperm 770" /etc/redis/redis.conf
-                usermod -a -G redis www-data
-                systemctl restart redis-server
-                # https://docs.nextcloud.com/server/19/admin_manual/configuration_server/caching_configuration.html#id2
-                sed -i "/^extension/a redis.session.locking_enabled=1\nredis.session.lock_retries=-1\nredis.session.lock_wait_time=10000\n" /etc/php/$PHP_VERSION/mods-available/redis.ini
-
-                # PHP-FPM ini
-                cp /etc/php/$PHP_VERSION/fpm/php.ini /etc/php/$PHP_VERSION/fpm/php.ini."`date +"%Y-%m-%d"`"
-                # https://www.php.net/manual/en/opcache.configuration.php
-                              
-                sed -i "s/^opcache.enable_cli/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i "/^;opcache.enable_cli/a opcache.enable_cli=1" /etc/php/$PHP_VERSION/fpm/php.ini
-
-                sed -i "s/^output_buffering/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i "/^;output_buffering/a output_buffering=Off" /etc/php/$PHP_VERSION/fpm/php.ini
-
-                sed -i 's/memory_limit =.*/memory_limit = 1024M/' /etc/php/$PHP_VERSION/fpm/php.ini
-
-                sed -i 's/upload_max_filesize =.*/upload_max_filesize = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i 's/post_max_size =.*/post_max_size = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
-
-                # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html
-                sed -i "s/^max_input_time/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i "/^;max_input_time/a max_input_time=3600" /etc/php/$PHP_VERSION/fpm/php.ini                
-
-                sed -i "s/^max_execution_time/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i "/^;max_execution_time/a max_execution_time=3600" /etc/php/$PHP_VERSION/fpm/php.ini   
-
-                # https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#jit
-                sed -i "s/^opcache.jit=/;&/" /etc/php/$PHP_VERSION/mods-available/opcache.ini
-                sed -i "/^;opcache.jit=/a opcache.jit=1255\nopcache.jit_buffer_size=128M\nopcache.interned_strings_buffer=16\nopcache.max_accelerated_files=10000\nopcache.memory_consumption=128\nopcache.save_comments=1\nopcache.revalidate_freq=1" /etc/php/$PHP_VERSION/mods-available/opcache.ini
-
-                # https://docs.nextcloud.com/server/20/admin_manual/configuration_server/caching_configuration.html?highlight=memcache#id1
-                sed -i "/^extension/a apc.enable_cli=1" /etc/php/$PHP_VERSION/mods-available/apcu.ini
-
-                # https://www.php.net/manual/en/class.sessionhandler.php
-                sed -i "s/^session.save_handler/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i "/^;session.save_handler/a session.save_handler = redis" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i "s/^session.save_path/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
-                sed -i '/^;session.save_path/a session.save_path = "tcp://127.0.0.1:6379"' /etc/php/$PHP_VERSION/fpm/php.ini
-
-                # PHP CLI ini
-                cp /etc/php/$PHP_VERSION/cli/php.ini /etc/php/$PHP_VERSION/cli/php.ini."`date +"%Y-%m-%d"`"
-                cp /etc/php/$PHP_VERSION/fpm/php.ini /etc/php/$PHP_VERSION/cli/php.ini
-
-                # php-fpm only: https://www.php.net/manual/en/opcache.configuration.php#ini.opcache.file-cache
-                mkdir -p /var/www/.opcache
-                chown www-data:www-data /var/www/.opcache
-                sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php/$PHP_VERSION/fpm/php.ini
-
-                # tune php-fpm for 8 GB RAM: https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#tune-php-fpm
-                # PHP-FPM Process Calculator at https://spot13.com/pmcalculator/
-                sed -i "s/^pm.max_children/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.max_children/a pm.max_children = 230" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "s/^pm.start_servers/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.start_servers/a pm.start_servers = 50" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "s/^pm.min_spare_servers/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.min_spare_servers/a pm.min_spare_servers = 50" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "s/^pm.max_spare_servers/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-                sed -i "/^;pm.max_spare_servers/a pm.max_spare_servers = 150" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
-
-                systemctl enable ${phpVersion}-fpm
-                systemctl restart ${phpVersion}-fpm
-
-                # Certbot: Use Snap version
-                # apt-get install -q -y certbot
-                # apt-get install -q -y python3-certbot-apache python3-certbot-dns-route53 python-certbot-dns-route53-doc 
-
-                # Apache MPM event: https://httpd.apache.org/docs/2.4/mod/event.html
-                a2dismod ${phpVersion}
-                a2dismod mpm_prefork
-                a2enmod mpm_event proxy_fcgi setenvif
-                a2enconf ${phpVersion}-fpm
-
-                # Enable HTTPS 
-                a2enmod ssl
-                a2enmod rewrite
-                a2enmod http2
-
-                # HTTPS site: for Certbot
-                a2ensite default-ssl
-
-                # Enable index.php
-                sed -i "s/\bDirectoryIndex\b/& index.php/" /etc/apache2/mods-enabled/dir.conf
-
-                # Change permissions and ownership
-                usermod -a -G www-data ubuntu
-                chown -R ubuntu:www-data /var/www/html
-                chmod -R 2775 /var/www/html
-                find /var/www/html -type d -exec sudo chmod 2775 {} \;
-                find /var/www/html -type f -exec sudo chmod 0664 {} \;
-
-                # Nextcloud
-                a2enmod headers
-                a2enmod env
-                a2enmod dir
-                a2enmod mime
-
-                # https://docs.nextcloud.com/server/29/admin_manual/issues/general_troubleshooting.html#service-discovery
-                a2enconf nextcloud
-                systemctl enable apache2
-                systemctl restart apache2
-
-                # MySQL/MariaDB database
-                # https://docs.nextcloud.com/server/20/admin_manual/configuration_database/linux_database_configuration.html#database-read-committed-transaction-isolation-level
-                export DB="${databaseOption}"
-                case $DB in
-                  MySQL)
-                    apt-get install -q -y mysql-server
-                    # https://docs.nextcloud.com/server/20/admin_manual/configuration_database/mysql_4byte_support.html#
-                    cp /etc/mysql/mysql.conf.d/mysqld.cnf /etc/mysql/mysql.conf.d/mysqld.cnf."`date +"%Y-%m-%d"`"
-                    sed -i "/^\[mysqld\]/a innodb_file_per_table=1\ntransaction_isolation = READ-COMMITTED" /etc/mysql/mysql.conf.d/mysqld.cnf
-                    sed -i "/^#innodb_buffer_pool_size/a innodb_buffer_pool_size = 512M" /etc/mysql/mysql.conf.d/mysqld.cnf
-                    systemctl enable --now mysql
-                    ;;
-                  MariaDB)
-                    apt-get install -q -y mariadb-server
-                    # https://docs.nextcloud.com/server/20/admin_manual/configuration_database/mysql_4byte_support.html#mariadb-10-3-or-later
-                    cp /etc/mysql/mariadb.conf.d/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf."`date +"%Y-%m-%d"`"
-                    sed -i "/^\[mysqld\]/a innodb_file_per_table=1\ntransaction_isolation = READ-COMMITTED" /etc/mysql/mariadb.conf.d/50-server.cnf
-                    sed -i "/^#innodb_buffer_pool_size/a innodb_buffer_pool_size = 512M" /etc/mysql/mariadb.conf.d/50-server.cnf
-                    systemctl enable --now mariadb
-                    ;;
-                esac
-
-                # Nextcloud files
-                cd /tmp
-                curl -s -L -O https://nextcloud.com/nextcloud.asc
-                gpg --import nextcloud.asc
-
-                curl -s -L -O https://download.nextcloud.com/server/releases/latest.zip
-                curl -s -L -O https://download.nextcloud.com/server/releases/latest.zip.asc
-                gpg --verify latest.zip.asc
-
-                unzip -q /tmp/latest.zip
-                rsync -r /tmp/nextcloud/ /var/www/html/
-
-                # Preconfigured config.php
-                cp /root/nextcloud/config.php /var/www/html/config/config.php
-                chown -R www-data:www-data /var/www/html/
-
-                # Generate random Nextcloud and MySQL/MariaDB password
-                export rndPassword=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1`
-                echo "Password = $rndPassword" >> /root/.nextcloud-credentials
-
-                # Prepare database
-                sudo mysql -u root -e "CREATE USER 'nextcloud'@'localhost' IDENTIFIED BY '$rndPassword';
-                CREATE DATABASE IF NOT EXISTS nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-                GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost';
-                FLUSH PRIVILEGES;"
-
-                # Install Nextcloud: https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/occ_command.html#command-line-installation-label
-                cd /var/www/html/
-                sudo -u www-data php occ  maintenance:install \
-                 --database='mysql' --database-name='nextcloud' \
-                 --database-user='nextcloud' --database-pass="$rndPassword" \
-                 --admin-user='${adminUsername}' --admin-pass="$rndPassword"
-
-                # nextcloud.occ
-                echo "alias nextcloud.occ='sudo -u www-data php /var/www/html/occ'" >> ~/.bashrc
-                echo "alias nextcloud.occ='sudo -u www-data php /var/www/html/occ'" >> /home/ubuntu/.bashrc
-
-                # Allow ALL as trusted_domains: https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/config_sample_php_parameters.html#trusted-domains
-                sudo -u www-data php occ config:system:set "trusted_domains" 1 --value=*
-
-                # phpinfo troubleshooting: https://docs.nextcloud.com/server/stable/admin_manual/issues/general_troubleshooting.html
-                sudo -u www-data php occ config:app:set --value=yes serverinfo phpinfo
-
-                # Disable default apps
-                sudo -u www-data php occ app:disable dashboard
-                sudo -u www-data php occ app:disable photos
-                sudo -u www-data php occ app:disable firstrunwizard
-                sudo -u www-data php occ app:disable weather_status
-
-                # Enable apps
-                sudo -u www-data php occ app:enable files_external
-                sudo -u www-data php occ app:install user_saml
-                sudo -u www-data php occ app:enable user_ldap
-
-                # Mount S3 as external storage?
-                export S3Bucket="${externalS3Bucket}"
-                if [ -n "$S3Bucket" ]; then
-                  sudo -u www-data php /var/www/html/occ files_external:create \
-                    "AmazonS3-${externalS3Bucket}"  "amazons3" "amazons3::accesskey" \
-                    -c key="${userAccessKey}" -c secret="${userAccessKey.SecretAccessKey}" \
-                    -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}" -c storageClass="${externalS3BucketStorageClass}"
-                fi
-
-                # May fix large file transfer failure for S3 external storage. Best option is to use larger instance size
-                # https://github.com/nextcloud/server/issues/24390 https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
-                # sed -i "s/524288000;/104857600;/g" /var/www/html/lib/private/Files/ObjectStore/S3ConnectionTrait.php
-
-                # sendmail
-                apt-get install -q -y sendmail
-
-                # jq: for parsing /var/www/html/data/nextcloud.log
-                apt-get install -q -y jq
-
-                # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html#cron-jobs
-                crontab -u www-data /root/nextcloud/crontab-www-data
-
-                rm -f ${!0}
-              mode: "000740"
-              owner: "root"
-              group: "root"
-            "/etc/apache2/conf-available/nextcloud.conf": # https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html#apache-configuration-label
-              content: |
-                <Directory /var/www/>
-                  Require all granted
-                  AllowOverride All
-                  Options FollowSymLinks MultiViews
-
-                  <IfModule mod_dav.c>
-                    Dav off
-                  </IfModule>
-                </Directory>
-              mode: "000644"
-              owner: "root"
-              group: "root"
-            "/root/nextcloud/config.php":
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/files_locking_transactional.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/default_files_configuration.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/config_sample_php_parameters.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/default_files_configuration.html
-              content: !Sub
-                - |
-                  <?php
-
-                  $CONFIG = array(
-                    'trusted_domains' =>
-                    array (
-                      0 => 'localhost',
-                      1 => '*',
-                    ),
-                    'trusted_proxies' =>
-                    array (
-                      0 => '10.0.0.0/8',
-                      1 => '172.16.0.0/12',
-                      2 => '192.168.0.0/16',
-                    ),
-                    'default_phone_region' => 'SG',
-                    'maintenance_window_start' => 1,
-                    'memcache.local' => '\OC\Memcache\APCu',
-                    'memcache.distributed' => '\OC\Memcache\Redis',
-                    'memcache.locking' => '\OC\Memcache\Redis',
-                    'redis' => [
-                         'host' => '/var/run/redis/redis-server.sock',
-                         'port' => 0,
-                         'timeout' => 0.0,
-                    ],
-                    'mysql.utf8mb4' => true,
-                    'htaccess.RewriteBase' => '/',
-                    'defaultapp' => 'files',
-                    'skeletondirectory' => '', # set to '/var/www/html/core/skeleton' to include skeleton files               
-                    'objectstore' => array(
-                      'class' => 'OC\\Files\\ObjectStore\\S3',
-                      'arguments' => array(
-                        'bucket' => '${bucketName}',
-                        'region' => '${AWS::Region}',
-                        'hostname' => 's3.${AWS::Region}.amazonaws.com',
-                        'storageClass' => '${s3StorageClass}',
-                        'uploadPartSize' => '524288000',
-                        'verify_bucket_exists' => false,
-                        'use_ssl' => true
-                      ),
-                    ),
-                  );
-                - bucketName:
-                    !If [
-                      noS3BucketLogging,
-                      !Ref s3Bucket,
-                      !Ref s3BucketWithLogging,
-                    ]
-              mode: "000640"
-              owner: "root"
-              group: "root"
-            "/root/nextcloud/crontab-www-data":
-              content: |
-                */5  *  *  *  * php -f /var/www/html/cron.php
-              mode: "000640"
-              owner: "root"
-              group: "root"
-            "/root/.nextcloud-credentials":
-              content: !Sub |
-                IAM User: ${iamUser}
-                ACCESS_KEY = ${userAccessKey}
-                SECRET_ACCESS_KEY = ${userAccessKey.SecretAccessKey}
-
-                Database User: nextcloud
-
-              mode: "000400"
-              owner: "root"
-              group: "root"
-          commands:
-            install:
-              command: "/root/install-nextcloud.sh > /var/log/install-nextcloud.log 2>&1"
-              ignoreErrors: "true"
-    Properties:
-      ImageId: # https://ubuntu.com/server/docs/cloud-images/amazon-ec2 https://ubuntu.com/blog/ubuntu-pro-is-now-part-of-the-aws-ec2-console
-        !If [
-          useUbuntu2404x86,
-          "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}",
-          !If [
-            useUbuntu2404arm64,
-            "{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}",
-            !If [
-              useUbuntu2204x86,
-              "{{resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
-              !If [
-                useUbuntu2204arm64,
-                "{{resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id}}",
-                !If [
-                  useUbuntuPro2404x86,
-                  "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id}}",
-                  !If [
-                    useUbuntuPro2404arm64,
-                    "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}",
-                    !If [
-                      useUbuntuPro2204x86,
-                      "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id}}",
-                      "{{resolve:ssm:/aws/service/canonical/ubuntu/pro-server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id}}",
-                    ],
-                  ],
-                ],
-              ],
-            ],
-          ],
-        ]
-      InstanceType: !Ref instanceType
-      IamInstanceProfile: !Ref instanceProfile
-      KeyName: !Ref ec2KeyPair
-      SubnetId: !Ref subnetID
-      Monitoring: true
-      DisableApiTermination: !If [enableProtection, true, false]
-      EbsOptimized: true
-      SecurityGroupIds:
-        - !Ref securityGroup
-      BlockDeviceMappings:
-        - DeviceName: /dev/sda1
-          Ebs:
-            VolumeType: !Ref volumeType
-            VolumeSize: !Ref volumeSize
-            DeleteOnTermination: true
-            Encrypted: true
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          mkdir -p /tmp/cfn
-          cd /tmp/cfn
-
-          # disable IPv6 during setup
-          sysctl -w net.ipv6.conf.all.disable_ipv6=1
-          sysctl -w net.ipv6.conf.default.disable_ipv6=1
-
-          # https://stackoverflow.com/questions/33370297/apt-get-update-non-interactive
-          export DEBIAN_FRONTEND=noninteractive
-
-          systemctl stop apt-daily.timer apt-daily-upgrade.timer
-          apt-get clean all
-          apt-get update -q
-          apt-get install -q -y procps
-          pkill apt
-          apt-get install -q -y wget tmux unzip tar curl sed
-
-          # CfN scripts: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
-          apt-get install -q -y python3 python3-pip python3-setuptools python3-docutils python3-daemon
-          curl -s -L -O https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
-          tar -xf aws-cfn-bootstrap-py3-latest.tar.gz
-          cd aws-cfn-bootstrap-2.0
-          python3 setup.py build > /var/log/install-cfn-helper.log 2>&1
-          python3 setup.py install >> /var/log/install-cfn-helper.log 2>&1
-          cd /tmp/cfn
-          export CFN_INIT="python3 /usr/local/bin/cfn-init"
-
-          $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c setup
-
-          # Install desktop environment and DCV?
-          export installDCV="${installDCV}"
-          case $installDCV in
-            Yes)
-              $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c dcv_install
-              ;;
-          esac 
-
-          # Nextcloud
-          $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c nextcloud_install
-
-          #
-          systemctl set-default multi-user.target
-          systemctl daemon-reload
-          systemctl enable dcv-post-reboot
-
-          # enable back IPv6
-          sysctl -w net.ipv6.conf.all.disable_ipv6=0
-          sysctl -w net.ipv6.conf.default.disable_ipv6=0
-
-          sleep 1 && reboot
-      Tags:
-        - Key: Name
-          Value: !Ref ec2Name
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
-
-  elasticIP:
-    Condition: useElasticIP
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      NetworkBorderGroup: !Ref AWS::Region
-      InstanceId: !Ref ec2Instance
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: Name
-          Value: !Sub
-            - "${AWS::StackName}-elasticIP-${UID}"
-            - UID:
-                !Select [
-                  3,
-                  !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-                ]
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
-
-  backupPlan:
-    Type: AWS::Backup::BackupPlan
-    Condition: createBackup
-    Properties:
-      BackupPlan:
-        BackupPlanName: !Sub
-          - "${AWS::StackName}-backupPlan-${UID}"
-          - UID:
-              !Select [
-                3,
-                !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-              ]
-        BackupPlanRule:
-          - RuleName: !Sub
-              - "${AWS::StackName}-backupRule-${UID}"
-              - UID:
-                  !Select [
-                    3,
-                    !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-                  ]
-            TargetBackupVault: !Ref backupVault
-            ScheduleExpression: !Ref scheduleExpression
-            ScheduleExpressionTimezone: !Ref scheduleExpressionTimezone
-            Lifecycle:
-              DeleteAfterDays: !Ref deleteAfterDays
-      BackupPlanTags:
-        {
-          "StackName": !Ref AWS::StackName,
-          "StackId": !Ref AWS::StackId,
-          "GitHub": "https://github.com/aws-samples/nextcloud-server",
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": "1.2.3.4/32"
         }
+      },
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f",
+        "arn:aws:s3:::nextcloud-s3bucket-8ohvkk9vzv2f/*"
+      ],
+      "Effect": "Allow"
+    }
+  ]
+}
+```
 
-  backupVault:
-    Type: AWS::Backup::BackupVault
-    Condition: createBackup
-    UpdateReplacePolicy: Delete
-    Properties:
-      BackupVaultName: !Sub
-        - "${AWS::StackName}-backupVault-${UID}"
-        - UID:
-            !Select [
-              3,
-              !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-            ]
-      BackupVaultTags:
-        {
-          "StackName": !Ref AWS::StackName,
-          "StackId": !Ref AWS::StackId,
-          "GitHub": "https://github.com/aws-samples/nextcloud-server",
-        }
+An [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) is used for S3 external storage access. Using EC2 IAM role for external storage currently generates errors in nextcloud.log. ([Issue #46400](https://github.com/nextcloud/server/issues/46400)) The IAM user can be located in CloudFormation **Resources** section where `Logical ID` is **iamUser**, and you may want to configure the associated policy `aws:SourceIp` value. You can modify its permission to mount additional S3 buckets; the security credentials are located in `/root/.nextcloud-credentials` on EC2 instance. 
 
-  backupSelection:
-    Type: AWS::Backup::BackupSelection
-    Condition: createBackup
-    Properties:
-      BackupPlanId: !Ref backupPlan
-      BackupSelection:
-        IamRoleArn: !GetAtt backupRestoreRole.Arn
-        Resources:
-          - !If
-            - backupS3
-            - !If [
-                noS3BucketLogging,
-                !GetAtt s3Bucket.Arn,
-                !GetAtt s3BucketWithLogging.Arn,
-              ]
-            - !Ref AWS::NoValue
-          - !If
-            - backupEC2
-            - !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${ec2Instance}"
-            - !Ref AWS::NoValue
-          - !If
-            - backupExternalStorage
-            - !Sub "arn:${AWS::Partition}:s3:::${externalS3Bucket}"
-            - !Ref AWS::NoValue
-        SelectionName: !Sub
-          - "${AWS::StackName}-backupSelection-${UID}"
-          - UID:
-              !Select [
-                3,
-                !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
-              ]
+### Sensitive data protection
+To strengthen data security posture, you can enable [Amazon Macie](https://aws.amazon.com/macie/) to automate discovery of sensitive data that is uploaded to your S3 bucket
 
-  backupRestoreRole:
-    Type: AWS::IAM::Role
-    Condition: createBackup
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: backup.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: restore-EC2-instance-profile
-          PolicyDocument: # https://docs.aws.amazon.com/aws-backup/latest/devguide/restoring-ec2.html
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - iam:PassRole
-                Resource: !GetAtt instanceIamRole.Arn
-      ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSBackupServiceRolePolicyForS3Backup"
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSBackupServiceRolePolicyForS3Restore"
-      Tags:
-        - Key: StackName
-          Value: !Ref AWS::StackName
-        - Key: StackId
-          Value: !Ref AWS::StackId
-        - Key: GitHub
-          Value: https://github.com/aws-samples/nextcloud-server
 
-Outputs:
-  SetPasswordCmd:
-    Description: Set Nextcloud admin password command
-    Value: !Sub "sudo -u www-data php /var/www/html/occ user:resetpassword ${adminUsername}"
+## Securing EC2 instance
 
-  EC2console:
-    Description: EC2 console
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#Instances:search=${ec2Instance}"
+To futher secure your EC2 instance, you may want to
 
-  EC2instanceConnect:
-    Condition: createSgEIC
-    Description: EC2 Instance Connect
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=standard&instanceId=${ec2Instance}&osUser=ubuntu&sshPort=22#/"
+- Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
+- Disable SSH access from public internet (`allowSSHport`)
+  - Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access
+  - If you have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) and [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed, you can start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh)
+- Use DCV (`installDCV`) [native clients](https://www.amazondcv.com/) for remote access
+  - Disable web browser client by removing `nice-dcv-web-viewer` package
+- Deploy EC2 instance in a private subnet
+  - Use [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) and [AWS WAF](https://aws.amazon.com/waf/) to [protect your EC2 instance](https://repost.aws/knowledge-center/waf-protect-ec2-instance)
+  - Use [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) to [request a public HTTPS certificate](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and [associate it](https://repost.aws/knowledge-center/associate-acm-certificate-alb-nlb) with your Application Load Balancer
+- Use AWS Backup (`backupResource`). Enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) to prevent your backups from accidental or malicious deletion, and for [protection from ransomware](https://aws.amazon.com/blogs/security/updated-ebook-protecting-your-aws-environment-from-ransomware/)
+- Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to [scan EC2 instance](https://docs.aws.amazon.com/inspector/latest/user/scanning-ec2.html) for software vulnerabilities and unintended network exposure.
+- Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) security monitoring service with [Malware Protection for EC2](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html)
 
-  EC2serialConsole:
-    Description: EC2 Serial Console
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=${ec2Instance}&serialPort=0#/"
+## Clean Up
+To remove created resources,
+- [Empty](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) created S3 bucket(s)
+- [Delete](https://docs.aws.amazon.com/aws-backup/latest/devguide/deleting-backups.html) any recovery points in created backup vault
+- [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection (if enabled)
+- [Delete](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-delete-stack.html) CloudFormation stack
 
-  SSMsessionManager:
-    Condition: noDCV
-    Description: SSM Session Manager
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
 
-  SSMsessionManagerDCV:
-    Condition: installDCV
-    Description: SSM Session Manager ("sudo passwd ubuntu" to set password for DCV login)
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
+## Security
 
-  DCVwebConsole:
-    Condition: installDCV
-    Description: DCV web browser client (login as ubuntu)
-    Value:
-      !If [
-        displayPublicIP,
-        !Sub "https://${ec2Instance.PublicIp}:8443",
-        !Sub "https://${ec2Instance.PrivateIp}:8443",
-      ]
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
-  WebUrl:
-    Description: Website
-    Value:
-      !If [
-        displayPublicIP,
-        !Sub "https://${ec2Instance.PublicIp}",
-        !Sub "https://${ec2Instance.PrivateIp}",
-      ]
+## License
 
-  WebminUrl:
-    Condition: installWebmin
-    Description: Webmin (set root password and login as root)
-    Value:
-      !If [
-        displayPublicIP,
-        !Sub "https://${ec2Instance.PublicIp}:10000",
-        !Sub "https://${ec2Instance.PrivateIp}:10000",
-      ]
-
-  NextcloudLogUrl:
-    Description: Cloudwatch log for nextcloud.log
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/nextcloud.log/log-events/${ec2Instance}"
+This library is licensed under the MIT-0 License. See the LICENSE file.
