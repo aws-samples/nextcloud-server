@@ -12,18 +12,21 @@ The template offers the option to install [Webmin](https://github.com/webmin/web
 ## About CloudFormation template
 
 ### Installation method
-This template uses [Nextcloud .tar archive](https://nextcloud.com/install/) to install Nextcloud, which is a [recommended 
+This template uses [Nextcloud .tar archive](https://nextcloud.com/install/) to install Nextcloud, which is a [recommended installation
 method](https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html).
 
-### Requirements
-Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html)
-- EC2 instance must be provisioned in a subnet with IPv4 internet connectivity. 
-- Ensure that the instance type you specify matches the selected processor architecture (x86_64/arm64).
 
 ### Architecture diagram
 <img alt="architecture" src="nextcloud-server.png">
 
 *Solution can be deployed in a private subnet for internal only use.*
+
+### Requirements
+Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html),
+- EC2 instance must be provisioned in a subnet with IPv4 internet connectivity. 
+- To use [Application Load Balancer (ALB)](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with HTTPS, either [request a public certificate](https://docs.aws.amazon.com/acm/latest/userguide/acm-public-certificates.html) or [import a certificate](https://docs.aws.amazon.com/acm/latest/userguide/import-certificate.html) into [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/)
+
+
 
 ## Deploying using CloudFormation console
 Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and login to AWS [CloudFormation console](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template). 
@@ -38,11 +41,26 @@ EC2 instance
 - `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `t4g.xlarge` [burstable instance type](https://aws.amazon.com/ec2/instance-types/t4/)
 - `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
 
-Network
+EC2 Network
 - `vpcID`: [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) with internet connectivity. Select [default VPC](https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html) if unsure
 - `subnetID`: subnet with internet connectivity. Select subnet in default VPC if unsure
 - `displayPublicIP`: select `No` if your EC2 instance will not receive [public IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-instance-addressing.html#concepts-public-addresses). EC2 private IP will be displayed in CloudFormation Outputs section instead. Default is `Yes`
-- `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Default is `Yes`
+- `assignStaticIP`: associates a static public IPv4 address using [Elastic IP address](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html). Associated charges are listed on [VPC pricing](https://aws.amazon.com/vpc/pricing/) page. Default is `Yes`
+
+Application Load Balancer (ALB)
+- `enableALB`: deploy [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with EC2 instance as target. Default is `No`
+- `albScheme`: either `internet-facing` or `internal`. An internet-facing load balancer routes requests from clients to targets over the internet. An internal load balancer routes requests to targets using private IP addresses. Default is `internet-facing`
+- `albIpAddressType`: [IP address type](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#ip-address-type), either `IPv4`, `IPv4-and-IPv6` or `IPv6`. Default is `IPv4`
+- `albVPC`: VPC to deploy ALB
+- `albSubnets`: subnets for ALB. Select at least 2 AZ subnets
+
+ALB HTTPS listener
+- `albCertificateArn`: Certificate ARN for ALB [HTTPS listener](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html). Leave blank not to create HTTPS listener
+- `albSecurityPolicy`: [Security policy](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html#describe-ssl-policies) for HTTPS listener. Default is `ELBSecurityPolicy-TLS13-1-2-2021-06`
+- `albRedirectHTTPtoHTTPS`: option to redirect HTTP requests to HTTPS. Default is `Yes`
+- `albSendHSTSheader`: option to send [HSTS (HTTP Strict Transport Security)](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html) header over HTTPS. Default is `Yes`
+
+  *Tha above options only applies if `enableALB` is `Yes`*
 
 Remote Administration
 - `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Use `127.0.0.1/32` to block incoming access from network. Default is `0.0.0.0/0`. 
@@ -60,7 +78,7 @@ Nextcloud
 - `r53ZoneID` (optional):  [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone ID to grant access for use with Certbot [certbot-dns-route53](#option-2-using-certbot-certbot-dns-route53-plugin) DNS plugin.  A `*` value will grant access to all Route 53 zones in your AWS account. Permission is restricted to **_acme-challenge.\*** TXT DNS records using [resource record set permissions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-permissions.html). Default is empty string for no access
 
 S3
-- `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) for files in primary storage. Default is `STANDARD`
+- `s3StorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) for files in primary storage. Default is [`INTELLIGENT_TIERING`](https://docs.aws.amazon.com/AmazonS3/latest/userguide/intelligent-tiering.html)
 - `enableS3bucketLogging`: enable [S3 server access logging](https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). Default is `No`
 
 
@@ -95,16 +113,20 @@ The following are available in **Outputs** section
 - `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
 - `WebUrl`: EC2 web server URL link
 
+If `enableALB` is `Yes`
+- `AlbConsole`: ALB console URL
+- `AlbUrl`: ALB domain name URL. Create a DNS CNAME or [Route 53 alias](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html) to ALB domain name especially if you are using HTTPS listener
+
 
 ## Using Nextcloud
 
 ### Nextcloud admin user password
-Use either EC2 instance connect or SSM session manager URL link to obtain in-browser terminal access to your EC2 instance. Copy and paste `SetPasswordCmd` value to set Nextcloud admin password. For example, if `adminUserName` value is `admin`, the command is
+Use either EC2 instance connect or SSM session manager URL link for in-browser terminal access to your EC2 instance. Copy and paste `SetPasswordCmd` value to configure Nextcloud admin password. For example, if `adminUserName` value is `admin`, the command is
 
 ```
 sudo -u www-data php /var/www/html/occ user:resetpassword admin
 ```
-After which, you can login to your Nextcloud application using `WebUrl` link or proceed to install a HTTPS certificate.
+After which, you can login to your Nextcloud application using `WebUrl` or `AlbUrl` link or proceed to install a HTTPS certificate.
 
 
 ### Obtaining certificate for HTTPS using Certbot 
@@ -127,7 +149,7 @@ sudo certbot --dns-route53 --installer apache
 
 Follow instructions to have Certbot request and install certificate on your web server. Refer to Certbot site for [help](https://certbot.eff.org/pages/help) with this tool.  
 
-#### Configure HSTS
+#### Configure HSTS on EC2 instance
 To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security) headers, edit `*ssl.conf` file in `/etc/apache2/sites-available/` folder and add the following text between `<VirtualHost>` and `</VirtualHost>` rows.
 
 ```
@@ -166,7 +188,7 @@ The [occ](https://docs.nextcloud.com/server/latest/admin_manual/configuration_se
 ### Mounting external storage services as external storage
 Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount external storage services including Windows file servers and S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html#available-storage-backends) for details.
 
-### Downloads
+### Client app downloads
 Desktop and mobile applications download links are available from [Nextcloud Install](https://nextcloud.com/install/#install-clients) page.
 
 ### Documentation
@@ -194,9 +216,9 @@ If you enable AWS Backup, you can restore your [EC2 instance](https://docs.aws.a
 To protect recovery points from inadvertent or malicious deletions, you can enable [AWS Backup Vault Lock](https://docs.aws.amazon.com/aws-backup/latest/devguide/vault-lock.html) in compliance mode to provide immutable WORM (write-once, read-many) backups. Vaults that are locked in compliance mode *cannot be deleted* once the cooling-off period ("grace time") expires if any recovery points are in the vault. Refer to [Protecting data with AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/protecting-data-with-aws-backup-vault-lock/) for more information. 
 
 ### Filter IAM policy source IP
-Nextcloud server uses [EC2 IAM role](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) for S3 primary storage access. If `assignStaticIP` is `Yes`, you can limit access to only your Nextcloud server. This ensures that even when the session credentials are stolen, an attacker cannot directly use it to access files from his own address.
+Nextcloud server uses [EC2 IAM role](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) for S3 primary storage access. If instance has Elastic IP (`assignStaticIP`) or is using [NAT gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html), you can limit IAM role access to its public IP address. This ensures that even when the session credentials are stolen, an attacker cannot directly use it to access files from his own address.
 
-The created IAM role can be located in CloudFormation console stack **Resources** section with `Logical ID` of **instanceIamRole**. Click on the `Physical ID` value to edit inline permission in IAM console. Change `aws:SourceIp` value from `0.0.0.0/0` to your EC2 instance public IPv4 address. If IP address is 1.2.3.4, your updated policy may look similar to below
+The created IAM role can be located in CloudFormation console stack **Resources** section with `Logical ID` of **instanceIamRole**. Click on the `Physical ID` value to edit inline permission in IAM console. Change `aws:SourceIp` value from `0.0.0.0/0` to your EC2 instance or NAT gateway Elastic IP address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
 ```
 {
@@ -233,21 +255,20 @@ To futher secure your EC2 instance, you may want to
 
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
 - Disable SSH access from public internet (`allowSSHport`)
-  - Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access
+  - Use [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html#ec2-instance-connect-connecting-console) or [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#start-ec2-console) for in-browser terminal access, or 
   - Start a session using [AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-cli) or [SSH](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html#sessions-start-ssh) with [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
-- Disable DCV (`installDCV`) web browser client by removing `nice-dcv-web-viewer` package
-  - Use DCV [native clients](https://www.amazondcv.com/) for remote access
+- Use DCV (`installDCV`) [native clients](https://www.amazondcv.com/) for remote access
+  - Disable web browser client by removing `nice-dcv-web-viewer` package
 - Deploy EC2 instance in a private subnet
   - Use [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) and [AWS WAF](https://aws.amazon.com/waf/) to [protect your EC2 instance](https://repost.aws/knowledge-center/waf-protect-ec2-instance)
   - Use [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) to [request a public HTTPS certificate](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and [associate it](https://repost.aws/knowledge-center/associate-acm-certificate-alb-nlb) with your Application Load Balancer
-- Use AWS Backup (`backupResource`) for data protection
-  - Enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) to prevent backups from accidental or malicious deletion and for [protection from ransomware](https://aws.amazon.com/blogs/security/updated-ebook-protecting-your-aws-environment-from-ransomware/)
+- Use AWS Backup (`backupResource`). Enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) to prevent your backups from accidental or malicious deletion, and for [protection from ransomware](https://aws.amazon.com/blogs/security/updated-ebook-protecting-your-aws-environment-from-ransomware/)
 - Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to [scan EC2 instance](https://docs.aws.amazon.com/inspector/latest/user/scanning-ec2.html) for software vulnerabilities and unintended network exposure.
 - Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) security monitoring service with [Malware Protection for EC2](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html)
 
 ## Clean Up
 To remove created resources,
-- [Empty](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) created S3 bucket(s)
+- [Empty](https://docs.aws.amazon.com/AmazonS3/latest/userguide/empty-bucket.html) created S3 bucket
 - [Delete](https://docs.aws.amazon.com/aws-backup/latest/devguide/deleting-backups.html) any recovery points in created backup vault
 - [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection (if enabled)
 - [Delete](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-delete-stack.html) CloudFormation stack

@@ -23,6 +23,8 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
+          default: "Nextcloud system requirements: https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html"
+      - Label:
           default: EC2 instance
         Parameters:
           - ec2Name
@@ -31,14 +33,29 @@ Metadata:
           - instanceType
           - ec2TerminationProtection
       - Label:
-          default: Network
+          default: EC2 Network
         Parameters:
           - vpcID
           - subnetID
           - displayPublicIP
           - assignStaticIP
       - Label:
-          default: Remote administration
+          default: Application Load Balancer (ALB)
+        Parameters:
+          - enableALB
+          - albScheme
+          - albIpAddressType
+          - albVPC
+          - albSubnets
+      - Label:
+          default: ALB HTTPS listener
+        Parameters:
+          - albCertificateArn
+          - albSecurityPolicy
+          - albRedirectHTTPtoHTTPS
+          - albSendHSTSheader
+      - Label:
+          default: EC2 Remote administration
         Parameters:
           - ingressIPv4
           - ingressIPv6
@@ -101,6 +118,26 @@ Metadata:
       assignStaticIP:
         default: "[Elastic IP] Assign static public internet IPv4 address"
 
+      enableALB:
+        default: "Deploy Application Load Balancer (ALB)"
+      albScheme:
+        default: "Load balancer scheme (internal or internet facing)"
+      albIpAddressType:
+        default: "IPv4 only, IPv6 only or dual stack (IPv4-and-IPv6)"
+      albVPC:
+        default: "VPC for ALB"
+      albSubnets:
+        default: "Subnets for ALB. Select at least 2"
+
+      albCertificateArn:
+        default: "Certificate ARN"
+      albSecurityPolicy:
+        default: "HTTPS listener security policy"
+      albRedirectHTTPtoHTTPS:
+        default: "Redirect HTTP requests to HTTPS"
+      albSendHSTSheader:
+        default: "Send HSTS (HTTP Strict Transport Security) header"
+
       ingressIPv4:
         default: "Allowed IPv4 prefix"
       ingressIPv6:
@@ -117,18 +154,20 @@ Metadata:
       phpVersion:
         default: "PHP version to install"
       r53ZoneID:
-        default: "(Optional) Route 53 hosted zone ID for certbot-dns-route53 access. Leave blank not to grant"
+        default: "Route 53 hosted zone ID for certbot-dns-route53 access. Leave blank not to grant"
       databaseOption:
         default: "Database server to install"
 
       s3StorageClass:
-        default: "Storage class for primary storage ( https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare )"
+        default: "Storage class for primary storage"
       enableS3BucketLogging:
         default: "Enable primary storage S3 server access logging"
       externalS3Bucket:
-        default: "(Optional) Existing S3 bucket to mount as external storage. Leave blank for none"
+        default: "Existing S3 bucket to mount as external storage. Leave blank for none"
       externalS3BucketRegion:
         default: "Region where external storage S3 bucket is located"
+      externalS3BucketStorageClass:
+        default: "Storage class for external storage"
 
       backupResource:
         default: "Resources to backup"
@@ -199,6 +238,81 @@ Parameters:
       - "No"
     Default: "Yes"
 
+  enableALB:
+    Type: String
+    Description: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/index.html
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "No"
+  albScheme:
+    Type: String
+    Description: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-application-load-balancer.html#configure-load-balancer
+    AllowedValues:
+      - internet-facing
+      - internal
+    Default: internet-facing
+  albIpAddressType:
+    Type: String
+    AllowedValues:
+      - IPv4
+      - IPv4-and-IPv6
+      - IPv6
+    Default: IPv4
+  albVPC:
+    Type: AWS::EC2::VPC::Id
+    Description: "https://console.aws.amazon.com/vpcconsole/home#vpcs:"
+  albSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: "https://console.aws.amazon.com/vpcconsole/home#subnets:"
+
+  albCertificateArn:
+    Type: String
+    Description: "https://console.aws.amazon.com/acm/home?#/certificates/list ( aws acm list-certificates )"
+    Default: ""
+  albSecurityPolicy:
+    Type: String
+    Description: "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/describe-ssl-policies.html"
+    AllowedValues:
+      - ELBSecurityPolicy-TLS13-1-3-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-3-2021-06
+      - ELBSecurityPolicy-TLS13-1-2-Res-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+      - ELBSecurityPolicy-TLS13-1-2-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-2-Ext2-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-2-Ext2-2021-06
+      - ELBSecurityPolicy-TLS13-1-2-Ext1-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-2-Ext1-2021-06
+      - ELBSecurityPolicy-TLS13-1-2-Ext0-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-2-2021-06
+      - ELBSecurityPolicy-TLS13-1-1-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-1-2021-06
+      - ELBSecurityPolicy-TLS13-1-0-FIPS-2023-04
+      - ELBSecurityPolicy-TLS13-1-0-2021-06
+      - ELBSecurityPolicy-TLS-1-2-Ext-2018-06
+      - ELBSecurityPolicy-TLS-1-2-2017-01
+      - ELBSecurityPolicy-TLS-1-1-2017-01
+      - ELBSecurityPolicy-TLS-1-0-2015-04
+      - ELBSecurityPolicy-FS-2018-06
+      - ELBSecurityPolicy-FS-1-2-Res-2020-10
+      - ELBSecurityPolicy-FS-1-2-Res-2019-08
+      - ELBSecurityPolicy-FS-1-2-2019-08
+      - ELBSecurityPolicy-FS-1-1-2019-08
+      - ELBSecurityPolicy-2016-08
+    Default: ELBSecurityPolicy-TLS13-1-2-2021-06
+  albRedirectHTTPtoHTTPS:
+    Type: String
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "Yes"
+  albSendHSTSheader:
+    Type: String
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "Yes"
+
   ingressIPv4:
     Type: String
     Description: "e.g. 1.2.3.4/32, get your source IP from https://checkip.amazonaws.com "
@@ -246,18 +360,19 @@ Parameters:
     Default: "MariaDB"
   r53ZoneID:
     Type: String
-    Description: https://console.aws.amazon.com/route53/v2/hostedzones
+    Description: https://console.aws.amazon.com/route53/v2/hostedzones ( aws route53 list-hosted-zones )
     Default: ""
 
   s3StorageClass:
     Type: String
+    Description: "https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html#sc-compare"
     AllowedValues:
       - GLACIER_IR
       - INTELLIGENT_TIERING
       - ONEZONE_IA
       - STANDARD
       - STANDARD_IA
-    Default: STANDARD
+    Default: INTELLIGENT_TIERING
   enableS3BucketLogging:
     Type: String
     Description: https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html
@@ -268,7 +383,7 @@ Parameters:
 
   externalS3Bucket:
     Type: String
-    Description: https://console.aws.amazon.com/s3/home
+    Description: https://console.aws.amazon.com/s3/home ( aws s3 ls )
     Default: ""
   externalS3BucketRegion:
     Type: String
@@ -318,7 +433,7 @@ Parameters:
       - ONEZONE_IA
       - STANDARD
       - STANDARD_IA
-    Default: STANDARD
+    Default: INTELLIGENT_TIERING
 
   volumeSize:
     Type: Number
@@ -773,6 +888,26 @@ Conditions:
       !Or [!Condition backupS3, !Condition backupExternalStorage],
     ]
 
+  createALB: !Equals [!Ref enableALB, "Yes"]
+  albAllowIPv4:
+    !Or [
+      !Equals [!Ref albIpAddressType, "IPv4"],
+      !Equals [!Ref albIpAddressType, "IPv4-and-IPv6"],
+    ]
+  albAllowIPv6:
+    !Or [
+      !Equals [!Ref albIpAddressType, "IPv6"],
+      !Equals [!Ref albIpAddressType, "IPv4-and-IPv6"],
+    ]
+
+  createHttpsListener:
+    !And [!Condition createALB, !Not [!Equals [!Ref albCertificateArn, ""]]]
+  createHttpListener:
+    !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "No"]]
+  createHttpRedirectListener:
+    !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"]]
+  sendHSTS: !Equals [!Ref albSendHSTSheader, "Yes"]
+
 Mappings:
   EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
     af-south-1:
@@ -875,6 +1010,14 @@ Mappings:
       IpPrefix: 18.237.140.160/29
       Ipv6Prefix: 2600:1f13:a0d:a700::/56
 
+  albIpTypeMapping:
+    IPv4:
+      Value: ipv4
+    IPv4-and-IPv6:
+      Value: dualstack
+    IPv6:
+      Value: dualstack-without-public-ipv4
+
 Resources:
   instanceIamRole:
     Type: AWS::IAM::Role
@@ -963,6 +1106,8 @@ Resources:
 
   securityGroup:
     Type: AWS::EC2::SecurityGroup
+    DependsOn:
+      - albSecurityGroup
     Properties:
       GroupDescription: Allow inbound HTTP, HTTPS and any remote admin ports
       VpcId: !Ref vpcID
@@ -1066,6 +1211,12 @@ Resources:
             FromPort: 22
             ToPort: 22
             CidrIpv6: !FindInMap [EICprefixMap, !Ref AWS::Region, Ipv6Prefix]
+          - !Ref AWS::NoValue
+        - !If
+          - createALB
+          - Description: Allow ALB inbound
+            IpProtocol: "-1"
+            SourceSecurityGroupId: !Ref albSecurityGroup
           - !Ref AWS::NoValue
       SecurityGroupEgress:
         - Description: Allow all outbound traffic (IPv4)
@@ -2041,6 +2192,175 @@ Resources:
         - Key: GitHub
           Value: https://github.com/aws-samples/nextcloud-server
 
+  alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: createALB
+    Properties:
+      IpAddressType: !FindInMap [albIpTypeMapping, !Ref albIpAddressType, Value]
+      Scheme: !Ref albScheme
+      SecurityGroups:
+        - !Ref albSecurityGroup
+      Subnets: !Ref albSubnets
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: StackId
+          Value: !Ref AWS::StackId
+        - Key: GitHub
+          Value: https://github.com/aws-samples/nextcloud-server
+
+  albHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: createHttpListener
+    Properties:
+      LoadBalancerArn: !Ref alb
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref albTargetGroup
+      Port: 80
+      Protocol: HTTP
+
+  albHttpRedirectListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: createHttpRedirectListener
+    Properties:
+      LoadBalancerArn: !Ref alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: "redirect"
+          RedirectConfig:
+            Protocol: "HTTPS"
+            Port: 443
+            Host: "#{host}"
+            Path: "/#{path}"
+            Query: "#{query}"
+            StatusCode: "HTTP_301"
+
+  albHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: createHttpsListener
+    Properties:
+      LoadBalancerArn: !Ref alb
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref albCertificateArn
+      SslPolicy: !Ref albSecurityPolicy
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref albTargetGroup
+      ListenerAttributes:
+        - !If
+          - sendHSTS
+          - Key: routing.http.response.server.enabled
+            Value: true
+          - !Ref AWS::NoValue
+        - !If
+          - sendHSTS
+          - Key: routing.http.response.strict_transport_security.header_value
+            Value: max-age=31536000; includeSubDomains
+          - !Ref AWS::NoValue
+
+  albTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: createALB
+    Properties:
+      HealthCheckEnabled: true
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: "200-302"
+      IpAddressType: ipv4
+      Port: 443
+      Protocol: HTTPS
+      ProtocolVersion: HTTP1
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: app_cookie
+        - Key: stickiness.app_cookie.cookie_name
+          Value: Nextcloud
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: StackId
+          Value: !Ref AWS::StackId
+        - Key: GitHub
+          Value: https://github.com/aws-samples/nextcloud-server
+      TargetType: instance
+      Targets:
+        - Id: !Ref ec2Instance
+          Port: 443
+      VpcId: !Ref albVPC
+
+  albSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB allow HTTP and HTTPS
+      VpcId: !Ref albVPC
+      SecurityGroupIngress:
+        - !If
+          - albAllowIPv4
+          - Description: HTTP (IPv4)
+            IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
+          - !Ref AWS::NoValue
+        - !If
+          - albAllowIPv4
+          - Description: HTTPS (IPv4)
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: 0.0.0.0/0
+          - !Ref AWS::NoValue
+        - !If
+          - albAllowIPv6
+          - Description: HTTP (IPv6)
+            IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIpv6: ::/0
+          - !Ref AWS::NoValue
+        - !If
+          - albAllowIPv6
+          - Description: HTTPS (IPv6)
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIpv6: ::/0
+          - !Ref AWS::NoValue
+      SecurityGroupEgress:
+        - !If
+          - albAllowIPv4
+          - Description: Allow all outbound traffic (IPv4)
+            IpProtocol: "-1"
+            CidrIp: 0.0.0.0/0
+          - !Ref AWS::NoValue
+        - !If
+          - albAllowIPv6
+          - Description: Allow all outbound traffic (IPv6)
+            IpProtocol: "-1"
+            CidrIpv6: ::/0
+          - !Ref AWS::NoValue
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: StackId
+          Value: !Ref AWS::StackId
+        - Key: Name
+          Value: !Sub
+            - "${AWS::StackName}-albSecurityGroup-${UID}"
+            - UID:
+                !Select [
+                  3,
+                  !Split ["-", !Select [2, !Split ["/", !Ref AWS::StackId]]],
+                ]
+        - Key: GitHub
+          Value: https://github.com/aws-samples/nextcloud-server
+
   backupPlan:
     Type: AWS::Backup::BackupPlan
     Condition: createBackup
@@ -2217,3 +2537,13 @@ Outputs:
   NextcloudLogUrl:
     Description: Cloudwatch log for nextcloud.log
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/nextcloud.log/log-events/${ec2Instance}"
+
+  AlbConsole:
+    Condition: createALB
+    Description: ALB Console
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#LoadBalancers:search=${alb}"
+
+  AlbUrl:
+    Condition: createALB
+    Description: ALB URL
+    Value: !Sub "http://${alb.DNSName}"
