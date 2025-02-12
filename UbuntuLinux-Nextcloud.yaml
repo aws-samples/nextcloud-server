@@ -900,12 +900,12 @@ Conditions:
       !Equals [!Ref albIpAddressType, "IPv4-and-IPv6"],
     ]
 
-  createHttpsListener:
-    !And [!Condition createALB, !Not [!Equals [!Ref albCertificateArn, ""]]]
   createHttpListener:
     !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "No"]]
+  createHttpsListener:
+    !And [!Condition createALB, !Not [!Equals [!Ref albCertificateArn, ""]]]
   createHttpRedirectListener:
-    !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"]]
+    !And [!Condition createHttpsListener, !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"]]
   sendHSTS: !Equals [!Ref albSendHSTSheader, "Yes"]
 
 Mappings:
