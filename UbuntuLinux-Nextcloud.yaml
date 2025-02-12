@@ -53,7 +53,7 @@ Metadata:
           - albCertificateArn
           - albSecurityPolicy
           - albRedirectHTTPtoHTTPS
-          - albSendHSTSheader
+          - albHstsHeaderValue
       - Label:
           default: EC2 Remote administration
         Parameters:
@@ -135,8 +135,8 @@ Metadata:
         default: "HTTPS listener security policy"
       albRedirectHTTPtoHTTPS:
         default: "Redirect HTTP requests to HTTPS"
-      albSendHSTSheader:
-        default: "Send HSTS (HTTP Strict Transport Security) header"
+      albHstsHeaderValue:
+        default: "HSTS (HTTP Strict Transport Security) header value. Leave blank not to send"
 
       ingressIPv4:
         default: "Allowed IPv4 prefix"
@@ -306,12 +306,10 @@ Parameters:
       - "Yes"
       - "No"
     Default: "Yes"
-  albSendHSTSheader:
+  albHstsHeaderValue:
     Type: String
-    AllowedValues:
-      - "Yes"
-      - "No"
-    Default: "Yes"
+    Description: "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html"
+    Default: "max-age=31536000; includeSubDomains"
 
   ingressIPv4:
     Type: String
@@ -900,13 +898,13 @@ Conditions:
       !Equals [!Ref albIpAddressType, "IPv4-and-IPv6"],
     ]
 
-  createHttpListener:
-    !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "No"]]
   createHttpsListener:
     !And [!Condition createALB, !Not [!Equals [!Ref albCertificateArn, ""]]]
+  createHttpListener:
+    !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "No"]]
   createHttpRedirectListener:
     !And [!Condition createHttpsListener, !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"]]
-  sendHSTS: !Equals [!Ref albSendHSTSheader, "Yes"]
+  sendHSTS: !Not [!Equals [!Ref albHstsHeaderValue, ""]]
 
 Mappings:
   EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
@@ -2259,7 +2257,7 @@ Resources:
         - !If
           - sendHSTS
           - Key: routing.http.response.strict_transport_security.header_value
-            Value: max-age=31536000; includeSubDomains
+            Value: !Ref albHstsHeaderValue
           - !Ref AWS::NoValue
 
   albTargetGroup:
@@ -2543,7 +2541,7 @@ Outputs:
     Description: ALB Console
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#LoadBalancers:search=${alb}"
 
-  AlbUrl:
+  albDnsName:
     Condition: createALB
     Description: ALB URL
-    Value: !Sub "http://${alb.DNSName}"
+    Value: !GetAtt alb.DNSName
