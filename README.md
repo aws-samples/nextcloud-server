@@ -54,7 +54,7 @@ Application Load Balancer (ALB)
 - `albVPC`: VPC to deploy ALB
 - `albSubnets`: subnets for ALB. Select at least 2 AZ subnets
   
-  *Select a VPC and subnet even if `enableALB` is `No`*
+*Select a VPC and subnet even if `enableALB` is `No`*
 
 ALB HTTPS listener
 - `albCertificateArn`: Certificate ARN for ALB [HTTPS listener](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html). Leave blank not to create HTTPS listener
@@ -62,7 +62,7 @@ ALB HTTPS listener
 - `albRedirectHTTPtoHTTPS`: option to redirect HTTP requests to HTTPS. Default is `Yes`
 - `albHstsHeaderValue`: [HSTS (HTTP Strict Transport Security)](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html) response header value to send. Do not specify a value not to send HSTS header. Default is `max-age=31536000; includeSubDomains`
 
-  *The above options only apply if `enableALB` is `Yes`*
+*The above options only apply if `enableALB` is `Yes`*
 
 Remote Administration
 
@@ -72,7 +72,7 @@ Remote Administration
 - `installDCV`: install graphical desktop environment and [Amazon DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 
-   *SSH, DCV and Webmin inbound access are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes.*
+*SSH, DCV and Webmin inbound access are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes.*
 
 Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
@@ -107,15 +107,20 @@ It may take more than 30 minutes to provision the entire stack. After your stack
 ## CloudFormation Outputs
 The following are available in **Outputs** section 
 
-- `DCVwebConsole` (if `installDCV` is `Yes`): DCV web browser console URL link. Login as `ubuntu`. Set user password by running `sudo passwd ubuntu` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
 - `EC2console`: EC2 console URL link to your EC2 instance
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
-- `EC2iamRole` : [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) URL link to manage permissions
+- `EC2iamRole`: [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) URL link to manage permissions
 - `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
 - `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password)
 - `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
-- `WebminUrl` (if `installWebmin` is `Yes`): Webmin URL link. Set the root password by running `sudo passwd root` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
 - `WebUrl`: EC2 web server URL link
+
+
+If `installDCV` is `Yes`
+- `DCVwebConsole`: DCV web browser console URL link. Login as `ubuntu`. Set user password by running `sudo passwd ubuntu` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
+
+If `installWebmin` is `Yes`
+- `WebminUrl`: Webmin URL link. Set the root password by running `sudo passwd root` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
 
 If `enableALB` is `Yes`
 - `AlbConsole`: ALB console URL
