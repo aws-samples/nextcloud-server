@@ -53,6 +53,8 @@ Application Load Balancer (ALB)
 - `albIpAddressType`: [IP address type](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#ip-address-type), either `IPv4`, `IPv4-and-IPv6` or `IPv6`. Default is `IPv4`
 - `albVPC`: VPC to deploy ALB
 - `albSubnets`: subnets for ALB. Select at least 2 AZ subnets
+  
+  *Select a VPC and subnet even if `enableALB` is `No`*
 
 ALB HTTPS listener
 - `albCertificateArn`: Certificate ARN for ALB [HTTPS listener](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html). Leave blank not to create HTTPS listener
@@ -60,8 +62,7 @@ ALB HTTPS listener
 - `albRedirectHTTPtoHTTPS`: option to redirect HTTP requests to HTTPS. Default is `Yes`
 - `albHstsHeaderValue`: [HSTS (HTTP Strict Transport Security)](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html) response header value to send. Do not specify a value not to send HSTS header. Default is `max-age=31536000; includeSubDomains`
 
-*The above options only apply if `enableALB` is `Yes`*
-
+  *The above options only apply if `enableALB` is `Yes`*
 
 Remote Administration
 
@@ -71,9 +72,7 @@ Remote Administration
 - `installDCV`: install graphical desktop environment and [Amazon DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
 
- *SSH, DCV and Webmin inbound access are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes.*
-
-
+   *SSH, DCV and Webmin inbound access are restricted to `ingressIPv4` and `ingressIPv6` IP prefixes.*
 
 Nextcloud
 - `adminUserName`: Nextcloud admin username. Default is `admin`
@@ -111,6 +110,7 @@ The following are available in **Outputs** section
 - `DCVwebConsole` (if `installDCV` is `Yes`): DCV web browser console URL link. Login as `ubuntu`. Set user password by running `sudo passwd ubuntu` from `EC2instanceConnect`, `SSMsessionManager` or SSH session first
 - `EC2console`: EC2 console URL link to your EC2 instance
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
+- `EC2iamRole` : [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) URL link to manage permissions
 - `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
 - `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password)
 - `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
@@ -222,7 +222,7 @@ To protect recovery points from inadvertent or malicious deletions, you can enab
 ### Filter IAM policy source IP
 Nextcloud server uses [EC2 IAM role](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html) for S3 primary storage access. If instance has Elastic IP (`assignStaticIP`) or is using [NAT gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html), you can limit IAM role access to its public IP address. This ensures that even when the session credentials are stolen, an attacker cannot directly use it to access files from his own address.
 
-The created IAM role can be located in CloudFormation console stack **Resources** section with `Logical ID` of **instanceIamRole**. Click on the `Physical ID` value to edit inline permission in IAM console. Change `aws:SourceIp` value from `0.0.0.0/0` to your EC2 instance or NAT gateway Elastic IP address. If IP address is 1.2.3.4, your updated policy may look similar to below
+Use `ec2IamRole` link to modify EC2 role inline permission. Change `aws:SourceIp` value from `0.0.0.0/0` to your EC2 instance or NAT gateway Elastic IP address. If IP address is 1.2.3.4, your updated policy may look similar to below
 
 ```
 {
@@ -266,7 +266,8 @@ To futher secure your EC2 instance, you may want to
 - Deploy EC2 instance in a private subnet
   - Use [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) and [AWS WAF](https://aws.amazon.com/waf/) to [protect your EC2 instance](https://repost.aws/knowledge-center/waf-protect-ec2-instance)
   - Use [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) to [request a public HTTPS certificate](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and [associate it](https://repost.aws/knowledge-center/associate-acm-certificate-alb-nlb) with your Application Load Balancer
-- Use AWS Backup (`backupResource`). Enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) to prevent your backups from accidental or malicious deletion, and for [protection from ransomware](https://aws.amazon.com/blogs/security/updated-ebook-protecting-your-aws-environment-from-ransomware/)
+- Use AWS Backup (`backupResource`).
+  - Enable [AWS Backup Vault Lock](https://aws.amazon.com/blogs/storage/enhance-the-security-posture-of-your-backups-with-aws-backup-vault-lock/) to prevent your backups from accidental or malicious deletion, and for [protection from ransomware](https://aws.amazon.com/blogs/security/updated-ebook-protecting-your-aws-environment-from-ransomware/)
 - Enable [Amazon Inspector](https://aws.amazon.com/inspector/) to [scan EC2 instance](https://docs.aws.amazon.com/inspector/latest/user/scanning-ec2.html) for software vulnerabilities and unintended network exposure.
 - Enable [Amazon GuardDuty](https://aws.amazon.com/guardduty/) security monitoring service with [Malware Protection for EC2](https://docs.aws.amazon.com/guardduty/latest/ug/malware-protection.html)
 

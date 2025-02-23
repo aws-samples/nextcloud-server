@@ -25,7 +25,7 @@ Metadata:
       - Label:
           default: "Nextcloud system requirements: https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html"
       - Label:
-          default: EC2 instance
+          default: EC2
         Parameters:
           - ec2Name
           - ec2KeyPair
@@ -55,7 +55,7 @@ Metadata:
           - albRedirectHTTPtoHTTPS
           - albHstsHeaderValue
       - Label:
-          default: EC2 Remote administration
+          default: EC2 remote administration
         Parameters:
           - ingressIPv4
           - ingressIPv6
@@ -70,7 +70,7 @@ Metadata:
           - databaseOption
           - r53ZoneID
       - Label:
-          default: S3
+          default: S3 Primary Storage
         Parameters:
           - s3StorageClass
           - enableS3BucketLogging
@@ -92,6 +92,7 @@ Metadata:
           - scheduleExpression
           - scheduleExpressionTimezone
           - deleteAfterDays
+
     ParameterLabels:
       osVersion:
         default: "OS version and architecture"
@@ -262,9 +263,13 @@ Parameters:
   albVPC:
     Type: AWS::EC2::VPC::Id
     Description: "https://console.aws.amazon.com/vpcconsole/home#vpcs:"
+    ConstraintDescription: Select a VPC
+    AllowedPattern: ".+"
   albSubnets:
     Type: List<AWS::EC2::Subnet::Id>
     Description: "https://console.aws.amazon.com/vpcconsole/home#subnets:"
+    ConstraintDescription: Select a subnet
+    AllowedPattern: ".+"
 
   albCertificateArn:
     Type: String
@@ -443,9 +448,9 @@ Parameters:
     Type: String
     Description: https://aws.amazon.com/ebs/general-purpose/
     AllowedValues:
-      - "gp3"
-      - "gp2"
-    Default: "gp3"
+      - gp3
+      - gp2
+    Default: gp3
 
   backupResource:
     Type: String
@@ -463,6 +468,7 @@ Parameters:
     Default: "cron(0 1 ? * * *)"
   scheduleExpressionTimezone: # https://nodatime.org/TimeZones?version=2024a&format=json
     Type: String
+    Description: https://docs.aws.amazon.com/scheduler/latest/UserGuide/schedule-types.html#time-zones
     AllowedValues:
       - Africa/Abidjan
       - Africa/Algiers
@@ -903,7 +909,10 @@ Conditions:
   createHttpListener:
     !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "No"]]
   createHttpRedirectListener:
-    !And [!Condition createHttpsListener, !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"]]
+    !And [
+      !Condition createHttpsListener,
+      !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"],
+    ]
   sendHSTS: !Not [!Equals [!Ref albHstsHeaderValue, ""]]
 
 Mappings:
@@ -1104,8 +1113,6 @@ Resources:
 
   securityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn:
-      - albSecurityGroup
     Properties:
       GroupDescription: Allow inbound HTTP, HTTPS and any remote admin ports
       VpcId: !Ref vpcID
@@ -1521,8 +1528,8 @@ Resources:
             "/opt/dcv-post-reboot.sh":
               content: !Sub |
                 #!/bin/bash
-                sysctl -w net.ipv6.conf.all.disable_ipv6=1
-                sysctl -w net.ipv6.conf.default.disable_ipv6=1
+                #sysctl -w net.ipv6.conf.all.disable_ipv6=1
+                #sysctl -w net.ipv6.conf.default.disable_ipv6=1
                 export DEBIAN_FRONTEND=noninteractive
 
                 python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
@@ -1530,8 +1537,8 @@ Resources:
                 apt-get update
                 apt-get upgrade -q -y
 
-                sysctl -w net.ipv6.conf.all.disable_ipv6=0
-                sysctl -w net.ipv6.conf.default.disable_ipv6=0
+                #sysctl -w net.ipv6.conf.all.disable_ipv6=0
+                #sysctl -w net.ipv6.conf.default.disable_ipv6=0
 
                 # DCV?
                 export installDCV="${installDCV}"
@@ -1592,6 +1599,16 @@ Resources:
               mode: "000644"
               owner: "root"
               group: "root"
+            "/etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf":
+              content: |
+
+                [Service]
+                ExecStart=
+                ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --timeout=3
+
+              mode: "000644"
+              owner: "root"
+              group: "root"
             "/root/install-sw.sh":
               content: !Sub |
                 #!/bin/bash
@@ -1647,6 +1664,14 @@ Resources:
                 ln -s /snap/bin/certbot /usr/bin/certbot
                 sudo snap set certbot trust-plugin-with-root=ok
                 sudo snap install certbot-dns-route53
+
+                # Ubuntu 24.04: reduce systemd-networkd-wait-online.service 2+ min timeout
+                if (lsb_release -r -s | grep -q 24); then
+                  sed -i "s/systemd-networkd-wait-online$/& --timeout=3/g" /usr/lib/systemd/system/systemd-networkd-wait-online.service
+                else
+                  rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
+                fi
+                systemctl daemon-reload
 
                 rm -f ${!0}
               mode: "000740"
@@ -1718,6 +1743,12 @@ Resources:
                 sed -i "s/Prompt=lts/Prompt=never/g" /etc/update-manager/release-upgrades
                 chown -R ubuntu:ubuntu /home/ubuntu/.config
 
+                # Ubuntu 24.04: reduce systemd-networkd-wait-online.service 2+ min timeout
+                if (lsb_release -r -s | grep -q 24); then
+                  sed -i "s/systemd-networkd-wait-online$/& --timeout=3/g" /usr/lib/systemd/system/systemd-networkd-wait-online.service
+                fi
+                systemctl daemon-reload
+
                 rm -f ${!0}
               mode: "000740"
               owner: "root"
@@ -1730,12 +1761,26 @@ Resources:
               mode: "000644"
               owner: "ubuntu"
               group: "ubuntu"
+            "/etc/skel/.gnomerc":
+              content: |
+                export XDG_CURRENT_DESKTOP=ubuntu:GNOME
+                export GNOME_SHELL_SESSION_MODE=ubuntu
+                export XDG_DATA_DIRS=/usr/share/gnome:/usr/local/share:/usr/share:/var/lib/snapd/desktop
+              mode: "000644"
+              owner: "root"
+              group: "root"
             "/home/ubuntu/.config/gnome-initial-setup-done":
               content: |
                 yes
               mode: "000664"
               owner: "ubuntu"
               group: "ubuntu"
+            "/etc/skel/.config/gnome-initial-setup-done":
+              content: |
+                yes
+              mode: "000644"
+              owner: "root"
+              group: "root"
           commands:
             install:
               command: "/root/install-dcv.sh > /var/log/install-dcv.log 2>&1"
@@ -2120,8 +2165,8 @@ Resources:
           cd /tmp/cfn
 
           # disable IPv6 during setup
-          sysctl -w net.ipv6.conf.all.disable_ipv6=1
-          sysctl -w net.ipv6.conf.default.disable_ipv6=1
+          #sysctl -w net.ipv6.conf.all.disable_ipv6=1
+          #sysctl -w net.ipv6.conf.default.disable_ipv6=1
 
           # https://stackoverflow.com/questions/33370297/apt-get-update-non-interactive
           export DEBIAN_FRONTEND=noninteractive
@@ -2129,6 +2174,7 @@ Resources:
           systemctl stop apt-daily.timer apt-daily-upgrade.timer
           apt-get clean all
           apt-get update -q
+          sleep 10
           apt-get install -q -y procps
           pkill apt
           apt-get install -q -y wget tmux unzip tar curl sed
@@ -2146,12 +2192,9 @@ Resources:
           $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c setup
 
           # Install desktop environment and DCV?
-          export installDCV="${installDCV}"
-          case $installDCV in
-            Yes)
-              $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c dcv_install
-              ;;
-          esac 
+          if [ "${installDCV}" = "Yes" ]; then
+            $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c dcv_install
+          fi
 
           # Nextcloud
           $CFN_INIT -v --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region} -c nextcloud_install
@@ -2162,8 +2205,8 @@ Resources:
           systemctl enable dcv-post-reboot
 
           # enable back IPv6
-          sysctl -w net.ipv6.conf.all.disable_ipv6=0
-          sysctl -w net.ipv6.conf.default.disable_ipv6=0
+          #sysctl -w net.ipv6.conf.all.disable_ipv6=0
+          #sysctl -w net.ipv6.conf.default.disable_ipv6=0
 
           sleep 1 && reboot
       Tags:
@@ -2303,6 +2346,7 @@ Resources:
 
   albSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: createALB
     Properties:
       GroupDescription: ALB allow HTTP and HTTPS
       VpcId: !Ref albVPC
@@ -2501,6 +2545,12 @@ Outputs:
   EC2serialConsole:
     Description: EC2 Serial Console
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=${ec2Instance}&serialPort=0#/"
+
+  EC2iamRole:
+    Description: EC2 IAM role
+    Value: !Sub
+      - "https://console.aws.amazon.com/iam/home#/roles/details/${role}"
+      - role: !Select [1, !Split ["/", !GetAtt instanceIamRole.Arn]]
 
   SSMsessionManager:
     Condition: noDCV
