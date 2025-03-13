@@ -116,7 +116,7 @@ Metadata:
       displayPublicIP:
         default: "EC2 in public subnet with public IP assigned?"
       assignStaticIP:
-        default: "Assign static public internet IPv4 address for EC2 in public subnet"
+        default: "[Elastic IP] Assign static public internet IPv4 address"
 
       enableALB:
         default: "Deploy Application Load Balancer (ALB)"
@@ -1592,8 +1592,8 @@ Resources:
               mode: "000644"
               owner: "root"
               group: "root"
-            ? "/etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf"
-            : content: |
+            "/etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf":
+              content: |
 
                 [Service]
                 ExecStart=
