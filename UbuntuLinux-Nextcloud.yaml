@@ -25,7 +25,7 @@ Metadata:
       - Label:
           default: "Nextcloud system requirements: https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html"
       - Label:
-          default: EC2
+          default: EC2 Instance
         Parameters:
           - ec2Name
           - ec2KeyPair
@@ -45,7 +45,6 @@ Metadata:
           - enableALB
           - albScheme
           - albIpAddressType
-          - albVPC
           - albSubnets
       - Label:
           default: ALB HTTPS listener
@@ -111,13 +110,13 @@ Metadata:
         default: "Volume type"
 
       vpcID:
-        default: "VPC with internet connectivity"
+        default: "VPC with outbound internet connectivity"
       subnetID:
-        default: "Subnet with internet connectivity"
+        default: "Subnet with outbound internet connectivity"
       displayPublicIP:
         default: "EC2 in public subnet with public IP assigned?"
       assignStaticIP:
-        default: "[Elastic IP] Assign static public internet IPv4 address"
+        default: "Assign static public internet IPv4 address for EC2 in public subnet"
 
       enableALB:
         default: "Deploy Application Load Balancer (ALB)"
@@ -125,10 +124,8 @@ Metadata:
         default: "Load balancer scheme (internal or internet facing)"
       albIpAddressType:
         default: "IPv4 only, IPv6 only or dual stack (IPv4-and-IPv6)"
-      albVPC:
-        default: "VPC for ALB"
       albSubnets:
-        default: "Subnets for ALB. Select at least 2"
+        default: "Subnets for ALB. Select at least 2 in EC2 VPC"
 
       albCertificateArn:
         default: "Certificate ARN"
@@ -260,11 +257,6 @@ Parameters:
       - IPv4-and-IPv6
       - IPv6
     Default: IPv4
-  albVPC:
-    Type: AWS::EC2::VPC::Id
-    Description: "https://console.aws.amazon.com/vpcconsole/home#vpcs:"
-    ConstraintDescription: Select a VPC
-    AllowedPattern: ".+"
   albSubnets:
     Type: List<AWS::EC2::Subnet::Id>
     Description: "https://console.aws.amazon.com/vpcconsole/home#subnets:"
@@ -835,8 +827,9 @@ Conditions:
   useUbuntuPro2404arm64: !Equals [!Ref osVersion, "Ubuntu Pro 24.04 (arm64)"]
   useUbuntuPro2204x86: !Equals [!Ref osVersion, "Ubuntu Pro 22.04 (x86_64)"]
 
-  useElasticIP: !Equals [!Ref assignStaticIP, "Yes"]
   displayPublicIP: !Equals [!Ref displayPublicIP, "Yes"]
+  useElasticIP:
+    !And [!Condition displayPublicIP, !Equals [!Ref assignStaticIP, "Yes"]]
   enableProtection: !Equals [!Ref ec2TerminationProtection, "Yes"]
   hasEIC:
     !Not [
@@ -906,13 +899,13 @@ Conditions:
 
   createHttpsListener:
     !And [!Condition createALB, !Not [!Equals [!Ref albCertificateArn, ""]]]
-  createHttpListener:
-    !And [!Condition createALB, !Equals [!Ref albRedirectHTTPtoHTTPS, "No"]]
   createHttpRedirectListener:
     !And [
       !Condition createHttpsListener,
       !Equals [!Ref albRedirectHTTPtoHTTPS, "Yes"],
     ]
+  createHttpListener:
+    !And [!Condition createALB, !Not [!Condition createHttpRedirectListener]]
   sendHSTS: !Not [!Equals [!Ref albHstsHeaderValue, ""]]
 
 Mappings:
@@ -1599,8 +1592,8 @@ Resources:
               mode: "000644"
               owner: "root"
               group: "root"
-            "/etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf":
-              content: |
+            ? "/etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf"
+            : content: |
 
                 [Service]
                 ExecStart=
@@ -2342,14 +2335,14 @@ Resources:
       Targets:
         - Id: !Ref ec2Instance
           Port: 443
-      VpcId: !Ref albVPC
+      VpcId: !Ref vpcID
 
   albSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Condition: createALB
     Properties:
       GroupDescription: ALB allow HTTP and HTTPS
-      VpcId: !Ref albVPC
+      VpcId: !Ref vpcID
       SecurityGroupIngress:
         - !If
           - albAllowIPv4

@@ -51,8 +51,7 @@ Application Load Balancer (ALB)
 - `enableALB`: deploy [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with EC2 instance as target. Default is `No`
 - `albScheme`: either `internet-facing` or `internal`. An internet-facing load balancer routes requests from clients to targets over the internet. An internal load balancer routes requests to targets using private IP addresses. Default is `internet-facing`
 - `albIpAddressType`: [IP address type](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#ip-address-type), either `IPv4`, `IPv4-and-IPv6` or `IPv6`. Default is `IPv4`
-- `albVPC`: VPC to deploy ALB
-- `albSubnets`: subnets for ALB. Select at least 2 AZ subnets
+- `albSubnets`: subnets for ALB. Select at least 2 AZ subnets in EC2 VPC
   
 *Select a VPC and subnet even if `enableALB` is `No`*
 
