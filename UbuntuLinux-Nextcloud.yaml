@@ -1992,6 +1992,9 @@ Resources:
                     "AmazonS3-${externalS3Bucket}"  "amazons3" "amazons3::accesskey" \
                     -c key="${userAccessKey}" -c secret="${userAccessKey.SecretAccessKey}" \
                     -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}" -c storageClass="${externalS3BucketStorageClass}"
+
+                  # Enable sharing: https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html#mount-options
+                  sudo -u www-data php /var/www/html/occ files_external:option 1 enable_sharing true
                 fi
 
                 # May fix large file transfer failure for S3 external storage. Best option is to use larger instance size
