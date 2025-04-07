@@ -51,17 +51,19 @@ Application Load Balancer (ALB)
 - `enableALB`: deploy [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with EC2 instance as target. Default is `No`
 - `albScheme`: either `internet-facing` or `internal`. An internet-facing load balancer routes requests from clients to targets over the internet. An internal load balancer routes requests to targets using private IP addresses. Default is `internet-facing`
 - `albIpAddressType`: [IP address type](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#ip-address-type), either `IPv4`, `IPv4-and-IPv6` or `IPv6`. Default is `IPv4`
-- `albSubnets`: subnets for ALB. Select at least 2 AZ subnets in EC2 VPC
+- `albSubnets`: subnets for ALB. Select at least 2 AZ subnets in EC2 VPC**
   
-*Select a VPC and subnet even if `enableALB` is `No`*
+** *Select a subnet even if `enableALB` is `No`*
 
 ALB HTTPS listener
+
+*Below options only apply if `enableALB` is `Yes`*
 - `albCertificateArn`: Certificate ARN for ALB [HTTPS listener](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html). Leave blank not to create HTTPS listener
 - `albSecurityPolicy`: [Security policy](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/create-https-listener.html#describe-ssl-policies) for HTTPS listener. Default is `ELBSecurityPolicy-TLS13-1-2-2021-06`
 - `albRedirectHTTPtoHTTPS`: option to redirect HTTP requests to HTTPS. Default is `Yes`
 - `albHstsHeaderValue`: [HSTS (HTTP Strict Transport Security)](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html) response header value to send. Do not specify a value not to send HSTS header. Default is `max-age=31536000; includeSubDomains`
 
-*The above options only apply if `enableALB` is `Yes`*
+
 
 Remote Administration
 
