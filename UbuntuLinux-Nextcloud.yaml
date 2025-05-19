@@ -189,7 +189,7 @@ Parameters:
       - Ubuntu Pro 24.04 (x86_64)
       - Ubuntu Pro 22.04 (arm64)
       - Ubuntu Pro 22.04 (x86_64)
-    Default: Ubuntu 22.04 (arm64)
+    Default: Ubuntu 24.04 (arm64)
   instanceType:
     Type: String
     Description: "https://console.aws.amazon.com/ec2/#InstanceTypes"
