@@ -144,6 +144,8 @@ If `enableALB` is `Yes`
 
 Login to your Nextcloud application using `WebUrl` or `AlbUrl` link. Default password is EC2 Instance ID.
 
+https://github.com/user-attachments/assets/1026415b-eef6-4968-8e12-e1cb925afc30
+
 ### Obtaining certificate for HTTPS using Certbot
 
 The EC2 instance uses a self-signed certificate for HTTPS. You can use [Certbot](https://certbot.eff.org/pages/about) to automatically obtain and install [Let's Encrypt](https://letsencrypt.org/) certificate on your web server.
