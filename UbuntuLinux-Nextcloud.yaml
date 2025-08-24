@@ -43,9 +43,9 @@ Metadata:
           default: Application Load Balancer (ALB)
         Parameters:
           - enableALB
+          - albSubnets
           - albScheme
           - albIpAddressType
-          - albSubnets
       - Label:
           default: ALB HTTPS listener
         Parameters:
@@ -54,7 +54,7 @@ Metadata:
           - albRedirectHTTPtoHTTPS
           - albHstsHeaderValue
       - Label:
-          default: EC2 remote administration
+          default: EC2 Remote Administration
         Parameters:
           - ingressIPv4
           - ingressIPv6
@@ -112,11 +112,11 @@ Metadata:
       vpcID:
         default: "VPC with outbound internet connectivity"
       subnetID:
-        default: "Subnet with outbound internet connectivity"
+        default: "Subnet in selected VPC with outbound internet connectivity"
       displayPublicIP:
         default: "EC2 in public subnet with public IP assigned?"
       assignStaticIP:
-        default: "[Elastic IP] Assign static public internet IPv4 address"
+        default: "Assign static public internet IPv4 address for EC2 in public subnet"
 
       enableALB:
         default: "Deploy Application Load Balancer (ALB)"
@@ -125,7 +125,7 @@ Metadata:
       albIpAddressType:
         default: "IPv4 only, IPv6 only or dual stack (IPv4-and-IPv6)"
       albSubnets:
-        default: "Subnets for ALB. Select at least 2 in EC2 VPC"
+        default: "Subnets for ALB. Select at least 2 in EC2 VPC. **Select a subnet even if not deploying ALB**"
 
       albCertificateArn:
         default: "Certificate ARN"
@@ -137,9 +137,9 @@ Metadata:
         default: "HSTS (HTTP Strict Transport Security) header value. Leave blank not to send"
 
       ingressIPv4:
-        default: "Allowed IPv4 prefix"
+        default: "Allowed source prefix (IPv4)"
       ingressIPv6:
-        default: "Allowed IPv6 prefix"
+        default: "Allowed source prefix (IPv6)"
       allowSSHport:
         default: "Allow SSH from network"
       installDCV:
@@ -182,22 +182,23 @@ Parameters:
     Description: https://aws.amazon.com/ec2/graviton/ https://ubuntu.com/aws/pro
     AllowedValues:
       - Ubuntu 24.04 (arm64)
-      - Ubuntu 24.04 (x86_64)
       - Ubuntu 22.04 (arm64)
-      - Ubuntu 22.04 (x86_64)
       - Ubuntu Pro 24.04 (arm64)
-      - Ubuntu Pro 24.04 (x86_64)
       - Ubuntu Pro 22.04 (arm64)
+
+      - Ubuntu 24.04 (x86_64)
+      - Ubuntu 22.04 (x86_64)
+      - Ubuntu Pro 24.04 (x86_64)
       - Ubuntu Pro 22.04 (x86_64)
     Default: Ubuntu 24.04 (arm64)
   instanceType:
     Type: String
     Description: "https://console.aws.amazon.com/ec2/#InstanceTypes"
-    Default: t4g.xlarge
+    Default: m6g.xlarge
 
   ec2Name:
     Type: String
-    Default: Nextcloud
+    Default: Nextcloud server
   ec2KeyPair:
     Type: AWS::EC2::KeyPair::KeyName
     Description: https://console.aws.amazon.com/ec2/#KeyPairs
@@ -310,14 +311,19 @@ Parameters:
 
   ingressIPv4:
     Type: String
-    Description: "e.g. 1.2.3.4/32, get your source IP from https://checkip.amazonaws.com "
+    Description: e.g. 1.2.3.4/32, get your source IP from https://checkip.amazonaws.com
+    AllowedPattern: "^\\d+\\.\\d+\\.\\d+\\.\\d+\\/\\d+$"
+    ConstraintDescription: Specify valid IPv4 prefix
     Default: 0.0.0.0/0
   ingressIPv6:
     Type: String
-    Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-instance-addressing.html#ipv6-addressing"
+    Description: e.g. 1:2:3:4::/64, get your internet IPv6 address (if any) with tools such as https://ifconfig.co
+    AllowedPattern: .+
+    ConstraintDescription: Specify valid IPv6 prefix
     Default: ::/0
   allowSSHport:
     Type: String
+    Description: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-linux-inst-ssh.html
     AllowedValues:
       - "Yes"
       - "No"
@@ -356,7 +362,7 @@ Parameters:
   r53ZoneID:
     Type: String
     Description: https://console.aws.amazon.com/route53/v2/hostedzones ( aws route53 list-hosted-zones )
-    Default: ""
+    Default: "*"
 
   s3StorageClass:
     Type: String
@@ -385,6 +391,7 @@ Parameters:
     AllowedValues:
       - af-south-1
       - ap-east-1
+      - ap-east-2
       - ap-northeast-1
       - ap-northeast-2
       - ap-northeast-3
@@ -456,7 +463,8 @@ Parameters:
     Default: "EC2-and-S3"
   scheduleExpression:
     Type: String
-    AllowedPattern: ".+"
+    Description: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html
+    AllowedPattern: .+
     Default: "cron(0 1 ? * * *)"
   scheduleExpressionTimezone: # https://nodatime.org/TimeZones?version=2024a&format=json
     Type: String
@@ -831,6 +839,7 @@ Conditions:
   useElasticIP:
     !And [!Condition displayPublicIP, !Equals [!Ref assignStaticIP, "Yes"]]
   enableProtection: !Equals [!Ref ec2TerminationProtection, "Yes"]
+
   hasEIC:
     !Not [
       !Equals [
@@ -1536,6 +1545,10 @@ Resources:
 
                 python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
 
+                #
+                cd /var/www/html/
+                sudo -u www-data php /var/www/html/occ maintenance:repair --include-expensive
+
                 apt-get update
                 apt-get upgrade -q -y
 
@@ -1546,8 +1559,8 @@ Resources:
                 export installDCV="${installDCV}"
                 case $installDCV in
                   Yes)
-                    systemctl enable dcv-virtual-session && systemctl restart dcv-virtual-session
-                    systemctl enable dcvserver && systemctl restart dcvserver
+                    systemctl enable --now dcv-virtual-session
+                    systemctl enable --now dcvserver
                     ;;
                   No)
                     rm -f /etc/systemd/system/dcv-virtual-session.service
@@ -1566,7 +1579,7 @@ Resources:
               content: |
                 {
                     "agent": {
-                        "metrics_collection_interval": 60,
+                        "metrics_collection_interval": 300,
                         "run_as_user": "cwagent"
                     },
                     "logs": {
@@ -1594,6 +1607,14 @@ Resources:
                                 "measurement": [
                                     "used_percent"
                                 ]
+                            },
+                            "disk": {
+                                "measurement": [
+                                    "used_percent"
+                                ],
+                                "resources": [
+                                    "/"
+                                ]
                             }
                         }
                     }
@@ -1616,6 +1637,11 @@ Resources:
                 #!/bin/bash
                 mkdir -p /tmp/cfn
                 cd /tmp/cfn
+
+                # Change password
+                PWD=$(cat /var/lib/cloud/data/instance-id)
+                USER=ubuntu
+                echo "$USER:$PWD" | chpasswd
 
                 # Update OS
                 apt-get update -q
@@ -1749,7 +1775,11 @@ Resources:
                 if (lsb_release -r -s | grep -q 24); then
                   sed -i "s/systemd-networkd-wait-online$/& --timeout=3/g" /usr/lib/systemd/system/systemd-networkd-wait-online.service
                 fi
+
+                #
                 systemctl daemon-reload
+                systemctl enable dcv-virtual-session
+                systemctl enable dcvserver
 
                 rm -f ${!0}
               mode: "000740"
@@ -1956,7 +1986,7 @@ Resources:
                 cp /root/nextcloud/config.php /var/www/html/config/config.php
                 chown -R www-data:www-data /var/www/html/
 
-                # Generate random Nextcloud and MySQL/MariaDB password
+                # Generate random MySQL/MariaDB password
                 export rndPassword=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1`
                 echo "Password = $rndPassword" >> /root/.nextcloud-credentials
 
@@ -1966,16 +1996,18 @@ Resources:
                 GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost';
                 FLUSH PRIVILEGES;"
 
-                # Install Nextcloud: https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/occ_command.html#command-line-installation-label
+                # Install Nextcloud: https://docs.nextcloud.com/server/latest/admin_manual/installation/command_line_installation.html
                 cd /var/www/html/
-                sudo -u www-data php occ  maintenance:install \
+                sudo -u www-data php occ maintenance:install \
                  --database='mysql' --database-name='nextcloud' \
                  --database-user='nextcloud' --database-pass="$rndPassword" \
-                 --admin-user='${adminUsername}' --admin-pass="$rndPassword"
+                 --admin-user='${adminUsername}' --admin-pass=$(cat /var/lib/cloud/data/instance-id)
 
                 # nextcloud.occ
                 echo "alias nextcloud.occ='sudo -u www-data php /var/www/html/occ'" >> ~/.bashrc
                 echo "alias nextcloud.occ='sudo -u www-data php /var/www/html/occ'" >> /home/ubuntu/.bashrc
+                echo "alias occ='sudo -u www-data php /var/www/html/occ'" >> ~/.bashrc
+                echo "alias occ='sudo -u www-data php /var/www/html/occ'" >> /home/ubuntu/.bashrc
 
                 # Allow ALL as trusted_domains: https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/config_sample_php_parameters.html#trusted-domains
                 sudo -u www-data php occ config:system:set "trusted_domains" 1 --value=*
@@ -2002,9 +2034,9 @@ Resources:
                     -c key="${userAccessKey}" -c secret="${userAccessKey.SecretAccessKey}" \
                     -c region=${externalS3BucketRegion} -c bucket="${externalS3Bucket}" -c storageClass="${externalS3BucketStorageClass}"
 
-                  # Enable sharing: https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html#mount-options
-                  sudo -u www-data php /var/www/html/occ files_external:option 1 enable_sharing true
                 fi
+                # Enable sharing for S3 external storage
+                sudo -u www-data php /var/www/html/occ files_external:option 1 enable_sharing true
 
                 # May fix large file transfer failure for S3 external storage. Best option is to use larger instance size
                 # https://github.com/nextcloud/server/issues/24390 https://help.nextcloud.com/t/s3-random-storage-problem-on-large-files/72897/4
@@ -2151,7 +2183,7 @@ Resources:
       IamInstanceProfile: !Ref instanceProfile
       KeyName: !Ref ec2KeyPair
       SubnetId: !Ref subnetID
-      Monitoring: true
+      Monitoring: false
       DisableApiTermination: !If [enableProtection, true, false]
       EbsOptimized: true
       SecurityGroupIds:
@@ -2557,6 +2589,10 @@ Outputs:
       - "https://console.aws.amazon.com/iam/home#/roles/details/${role}"
       - role: !Select [1, !Split ["/", !GetAtt instanceIamRole.Arn]]
 
+  EC2instanceID:
+    Description: EC2 Instance ID
+    Value: !Ref ec2Instance
+
   SSMsessionManager:
     Condition: noDCV
     Description: SSM Session Manager
@@ -2605,7 +2641,7 @@ Outputs:
     Description: ALB Console
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#LoadBalancers:search=${alb}"
 
-  albDnsName:
+  AlbDnsName:
     Condition: createALB
     Description: ALB URL
     Value: !GetAtt alb.DNSName
