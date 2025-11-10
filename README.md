@@ -43,7 +43,7 @@ EC2 instance
 - `ec2Name`: EC2 instance name 
 - `ec2KeyPair`: [EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) name. [Create key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html) if necessary
 - `osVersion`: operating system version and processor architecture. Default architecture is [Graviton](https://aws.amazon.com/ec2/graviton/) arm64
-- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `m6g.xlarge`
+- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `m6g.xlarge`. *NVIDIA GPU drivers will be installed if you select G or P instance types*
 - `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
 
 EC2 Network
