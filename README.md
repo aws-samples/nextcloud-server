@@ -129,7 +129,7 @@ The following are available in **Outputs** section
 
 If `installDCV` is `Yes`
 
-- `DCVwebConsole`: DCV web browser console URL link. Login as `ubuntu`. DDefault password is `EC2instanceID` value
+- `DCVwebConsole`: DCV web browser console URL link. Login as `ubuntu`. Default password is `EC2instanceID` value
 
 If `installWebmin` is `Yes`
 
