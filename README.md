@@ -27,7 +27,7 @@ method](https://docs.nextcloud.com/server/latest/admin_manual/installation/sourc
 
 Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html),
 
-- EC2 instance must be provisioned in a subnet with IPv4 internet connectivity. 
+- EC2 instance must be provisioned in a subnet with outbound IPv4 internet connectivity. 
 - To use [Application Load Balancer (ALB)](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with HTTPS, either [request a public certificate](https://docs.aws.amazon.com/acm/latest/userguide/acm-public-certificates.html) or [import a certificate](https://docs.aws.amazon.com/acm/latest/userguide/import-certificate.html) into [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/)
 
 ## Deploying using CloudFormation console
@@ -43,8 +43,10 @@ EC2 instance
 - `ec2Name`: EC2 instance name 
 - `ec2KeyPair`: [EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) name. [Create key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html) if necessary
 - `osVersion`: operating system version and processor architecture. Default architecture is [Graviton](https://aws.amazon.com/ec2/graviton/) arm64
-- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `m6g.xlarge`. *NVIDIA GPU drivers will be installed if you select G or P instance types*
+- `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `m6g.xlarge`. 
 - `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
+
+*To use Nextcloud [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) features, select x86_64 `osVersion` and x86_64 [NVIDIA GPU](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-driver-instance-type) `instancetype`. Template will [install](https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/install-nvidia-gpu-driver-cuda-toolkit-nvidia-container-toolkit-on-amazon-ec2-instances-running-ubuntu-linux) required NVIDIA GPU drivers and software*
 
 EC2 Network
 
@@ -121,13 +123,13 @@ The following are available in **Outputs** section
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
 - `EC2iamRole`: [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) URL link to manage permissions
 - `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
-- `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password)
+- `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password). Default password is `EC2instanceID` value
 - `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
 - `WebUrl`: EC2 web server URL link
 
 If `installDCV` is `Yes`
 
-- `DCVwebConsole`: DCV web browser console URL link. Login as `ubuntu`. Default password is EC2 Instance ID.
+- `DCVwebConsole`: DCV web browser console URL link. Login as `ubuntu`. DDefault password is `EC2instanceID` value
 
 If `installWebmin` is `Yes`
 
