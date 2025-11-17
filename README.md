@@ -6,9 +6,9 @@
 
 Although this repository is released under the [MIT-0](LICENSE) license, its CloudFormation template uses features from [Nextcloud](https://github.com/nextcloud/server) project. Nextcloud project's licensing includes the [AGPL](https://github.com/nextcloud/server?tab=AGPL-3.0-1-ov-file) license.
 
-The template offers the option to install [Webmin](https://github.com/webmin/webmin) which is released under [BSD-3-Clause](https://github.com/webmin/webmin?tab=BSD-3-Clause-1-ov-file) license.
+The template offers the option to install [Webmin](https://github.com/webmin/webmin) which is released under [BSD-3-Clause](https://github.com/webmin/webmin?tab=BSD-3-Clause-1-ov-file) license. Usage of [Amazon DCV](https://aws.amazon.com/hpc/dcv/) indicates acceptance of [DCV EULA](https://www.amazondcv.com/eula.html).
 
-Usage of template indicates acceptance of license agreements of all software that is installed in the EC2 instance. 
+By using the template, you accept license agreement of all software that is installed in the EC2 instance.
 
 ## Architecture diagram
 
@@ -24,7 +24,7 @@ The template provides the following features:
   - Amazon S3 [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3)
   - Redis [transaction file locking](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/files_locking_transactional.html)
   - Docker Engine with [HaRP](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp) for [AppAPI and External Apps (ExApps)](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html)
-  - NVIDIA GPU driver and NVIDIA Container toolkit for [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) support (x86_64 NVIDIA GPU EC2 instance)
+  - NVIDIA GPU driver and NVIDIA Container toolkit for [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) (x86_64 NVIDIA GPU EC2 instance)
 - Applications
   - [Apache](https://www.apache.org/) web server
   - [MariaDB](https://mariadb.org/) or [MySQL](https://www.mysql.com/) database server
@@ -305,15 +305,18 @@ Use `ec2IamRole` link to modify EC2 role inline permission. Change `aws:SourceIp
 
 An [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) is used for S3 external storage access. Using EC2 IAM role for external storage currently generates errors in nextcloud.log. ([Issue #46400](https://github.com/nextcloud/server/issues/46400)) The IAM user can be located in CloudFormation **Resources** section where `Logical ID` is **iamUser**, and you may want to configure the associated policy `aws:SourceIp` value. You can modify its permission to mount additional S3 buckets.
 
-### Security Credentials
-
-Database login, HaRP shared key and IAM user credentials are stored in `/home/ubuntu/next-credentials` file
-
 ### Sensitive data protection
 
 To strengthen data security posture, you can enable [Amazon Macie](https://aws.amazon.com/macie/) to automate discovery of sensitive data that is uploaded to your S3 bucket
 
-## Securing EC2 instance
+
+## Securing
+
+### Credentials
+
+Database login, HaRP shared key and IAM user credentials are stored in `/home/ubuntu/next-credentials`
+
+### Securing EC2 instance
 
 To futher secure your EC2 instance, you may want to
 
@@ -339,6 +342,12 @@ To remove created resources,
 - [Delete](https://docs.aws.amazon.com/aws-backup/latest/devguide/deleting-backups.html) any recovery points in created backup vault
 - [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection (if enabled)
 - [Delete](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-delete-stack.html) CloudFormation stack
+
+## Other options
+
+If you need a simple web interface for end users to transfer data into and out of S3, conside [AWS Transfer Family web apps](https://aws.amazon.com/aws-transfer-family/web-apps/). Refer to blog [Announcing AWS Transfer Family web apps for fully managed Amazon S3 file transfers](https://aws.amazon.com/blogs/aws/announcing-aws-transfer-family-web-apps-for-fully-managed-amazon-s3-file-transfers/) for information.
+
+To mount S3 bucket as a local file system, consider [Mountpoint for Amazon S3](https://aws.amazon.com/s3/features/mountpoint/).
 
 ## Security
 

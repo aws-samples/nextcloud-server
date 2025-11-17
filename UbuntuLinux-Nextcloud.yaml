@@ -23,7 +23,7 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: "Nextcloud system requirements: https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html"
+          default: "Nextcloud system requirements: https://docs.nextcloud.com/server/stable/admin_manual/installation/system_requirements.html"
       - Label:
           default: EC2 Instance
         Parameters:
@@ -1373,7 +1373,7 @@ Resources:
             Status: Enabled
           - Id: Delete-Previous-Versions
             NoncurrentVersionExpiration:
-              NoncurrentDays: 1
+              NoncurrentDays: 2
             Status: Enabled
           - Id: Delete-Expired-Delete-Marker
             ExpiredObjectDeleteMarker: true
@@ -1886,7 +1886,7 @@ Resources:
                 sed -i "/unixsocketperm/a unixsocket \/var\/run\/redis\/redis-server.sock\nunixsocketperm 770" /etc/redis/redis.conf
                 usermod -a -G redis www-data
                 systemctl restart redis-server
-                # https://docs.nextcloud.com/server/19/admin_manual/configuration_server/caching_configuration.html#id2
+                # https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/caching_configuration.html#using-the-redis-session-handler
                 sed -i "/^extension/a redis.session.locking_enabled=1\nredis.session.lock_retries=-1\nredis.session.lock_wait_time=10000\n" /etc/php/$PHP_VERSION/mods-available/redis.ini
 
                 # PHP-FPM ini
@@ -1904,14 +1904,14 @@ Resources:
                 sed -i 's/upload_max_filesize =.*/upload_max_filesize = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
                 sed -i 's/post_max_size =.*/post_max_size = 25G/' /etc/php/$PHP_VERSION/fpm/php.ini
 
-                # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html
+                # https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/big_file_upload_configuration.html
                 sed -i "s/^max_input_time/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
                 sed -i "/^;max_input_time/a max_input_time=3600" /etc/php/$PHP_VERSION/fpm/php.ini                
 
                 sed -i "s/^max_execution_time/;&/" /etc/php/$PHP_VERSION/fpm/php.ini
                 sed -i "/^;max_execution_time/a max_execution_time=3600" /etc/php/$PHP_VERSION/fpm/php.ini   
 
-                # https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#jit
+                # https://docs.nextcloud.com/server/stable/admin_manual/installation/server_tuning.html#jit
                 sed -i "s/^opcache.jit=/;&/" /etc/php/$PHP_VERSION/mods-available/opcache.ini
                 sed -i "/^;opcache.jit=/a opcache.jit=1255\nopcache.jit_buffer_size=128M\nopcache.interned_strings_buffer=16\nopcache.max_accelerated_files=10000\nopcache.memory_consumption=128\nopcache.save_comments=1\nopcache.revalidate_freq=1" /etc/php/$PHP_VERSION/mods-available/opcache.ini
 
@@ -1933,7 +1933,7 @@ Resources:
                 chown www-data:www-data /var/www/.opcache
                 sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php/$PHP_VERSION/fpm/php.ini
 
-                # tune php-fpm for 8 GB RAM: https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#tune-php-fpm
+                # tune php-fpm for 8 GB RAM: https://docs.nextcloud.com/server/stable/admin_manual/installation/server_tuning.html#tune-php-fpm
                 # PHP-FPM Process Calculator at https://spot13.com/pmcalculator/
                 sed -i "s/^pm.max_children/;&/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
                 sed -i "/^;pm.max_children/a pm.max_children = 230" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
@@ -1980,7 +1980,7 @@ Resources:
                 a2enmod dir
                 a2enmod mime
 
-                # https://docs.nextcloud.com/server/29/admin_manual/issues/general_troubleshooting.html#service-discovery
+                # https://docs.nextcloud.com/server/stable/admin_manual/issues/general_troubleshooting.html#service-discovery
                 a2enconf nextcloud
                 systemctl enable apache2
                 systemctl restart apache2
@@ -1991,12 +1991,12 @@ Resources:
                 a2enmod headers
 
                 # MySQL/MariaDB database
-                # https://docs.nextcloud.com/server/20/admin_manual/configuration_database/linux_database_configuration.html#database-read-committed-transaction-isolation-level
+                # https://docs.nextcloud.com/server/stable/admin_manual/configuration_database/linux_database_configuration.html#database-read-committed-transaction-isolation-level
                 export DB="${databaseOption}"
                 case $DB in
                   MySQL)
                     apt-get install -q -y mysql-server
-                    # https://docs.nextcloud.com/server/20/admin_manual/configuration_database/mysql_4byte_support.html#
+                    # https://docs.nextcloud.com/server/stable/admin_manual/configuration_database/mysql_4byte_support.html#
                     cp /etc/mysql/mysql.conf.d/mysqld.cnf /etc/mysql/mysql.conf.d/mysqld.cnf."`date +"%Y-%m-%d"`"
                     sed -i "/^\[mysqld\]/a innodb_file_per_table=1\ntransaction_isolation = READ-COMMITTED" /etc/mysql/mysql.conf.d/mysqld.cnf
                     sed -i "/^#innodb_buffer_pool_size/a innodb_buffer_pool_size = 512M" /etc/mysql/mysql.conf.d/mysqld.cnf
@@ -2004,7 +2004,7 @@ Resources:
                     ;;
                   MariaDB)
                     apt-get install -q -y mariadb-server
-                    # https://docs.nextcloud.com/server/20/admin_manual/configuration_database/mysql_4byte_support.html#mariadb-10-3-or-later
+                    # https://docs.nextcloud.com/server/stable/admin_manual/configuration_database/mysql_4byte_support.html#mariadb-10-3-or-later
                     cp /etc/mysql/mariadb.conf.d/50-server.cnf /etc/mysql/mariadb.conf.d/50-server.cnf."`date +"%Y-%m-%d"`"
                     sed -i "/^\[mysqld\]/a innodb_file_per_table=1\ntransaction_isolation = READ-COMMITTED" /etc/mysql/mariadb.conf.d/50-server.cnf
                     sed -i "/^#innodb_buffer_pool_size/a innodb_buffer_pool_size = 512M" /etc/mysql/mariadb.conf.d/50-server.cnf
@@ -2040,7 +2040,7 @@ Resources:
                 GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost';
                 FLUSH PRIVILEGES;"
 
-                # Install Nextcloud: https://docs.nextcloud.com/server/latest/admin_manual/installation/command_line_installation.html
+                # Install Nextcloud: https://docs.nextcloud.com/server/stable/admin_manual/installation/command_line_installation.html
                 cd /var/www/html/
                 sudo -u www-data php occ maintenance:install \
                  --database='mysql' --database-name='nextcloud' \
@@ -2092,10 +2092,10 @@ Resources:
                 # jq: for parsing /var/www/html/data/nextcloud.log
                 apt-get install -q -y jq
 
-                # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/background_jobs_configuration.html#cron-jobs
+                # https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/background_jobs_configuration.html#cron-jobs
                 crontab -u www-data /root/nextcloud/crontab-www-data
 
-                # ExApps: https://docs.nextcloud.com/server/latest/admin_manual/exapps_management/AppAPIAndExternalApps.html
+                # ExApps: https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html
                 # Add Docker's official GPG key
                 apt-get install -q -y ca-certificates curl
                 install -m 0755 -d /etc/apt/keyrings
@@ -2125,7 +2125,7 @@ Resources:
                   fi
                   cd /tmp
                   curl -L -O https://developer.download.nvidia.com/compute/cuda/repos/$DISTRO/$ARCH/cuda-keyring_1.1-1_all.deb
-                  apt-get install -y ./cuda-keyring_1.1-1_all.deb
+                  apt-get install -q -y ./cuda-keyring_1.1-1_all.deb
                   apt-get update
                   
                   if ( ec2-metadata -t | grep -q 6f\. ); then
@@ -2133,20 +2133,21 @@ Resources:
                     apt-get install -q -y dkms linux-headers-aws linux-modules-extra-aws unzip gcc make libglvnd-dev pkg-config
                     aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ . --no-sign-request
                     chmod +x NVIDIA-Linux-x86_64*.run
-                    KERNEL_VERSION=$(ls -a /lib/modules | sort -V -r | head -n 1)                   
+                    KERNEL_VERSION=$(ls -a /lib/modules | sort -V -r | head -n 1)                    
                     if (! uname -r | grep -q $KERNEL_VERSION ); then
                       sudo ./NVIDIA-Linux-x86_64*.run -s --kernel-source-path=/lib/modules/$KERNEL_VERSION/build --kernel-name=$KERNEL_VERSION --skip-module-load
-                    else
+                      sudo dkms autoinstall
+                    else 
                       sudo ./NVIDIA-Linux-x86_64*.run -s
                     fi
                   else
                     # Ubuntu ERD
                     VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
-                    apt-get install -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server
+                    apt-get install -q -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server             
                   fi
 
                   # For ExApps: https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/faq/GpuSupport.html
-                  sudo apt-get install -y nvidia-container-toolkit
+                  sudo apt-get install -q -y nvidia-container-toolkit
                   sudo nvidia-ctk runtime configure --runtime=docker
                   sudo systemctl restart docker
 
@@ -2220,11 +2221,11 @@ Resources:
               owner: "root"
               group: "root"
             "/root/nextcloud/config.php":
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/files_locking_transactional.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/default_files_configuration.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/config_sample_php_parameters.html
-              # https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/default_files_configuration.html
+              # https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/files_locking_transactional.html
+              # https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html
+              # https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/default_files_configuration.html
+              # https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/config_sample_php_parameters.html
+              # https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/default_files_configuration.html
               content: !Sub
                 - |
                   <?php
@@ -2355,7 +2356,6 @@ Resources:
           #sysctl -w net.ipv6.conf.all.disable_ipv6=1
           #sysctl -w net.ipv6.conf.default.disable_ipv6=1
 
-          # https://stackoverflow.com/questions/33370297/apt-get-update-non-interactive
           export DEBIAN_FRONTEND=noninteractive
 
           systemctl stop apt-daily.timer apt-daily-upgrade.timer
