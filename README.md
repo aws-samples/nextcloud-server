@@ -1,6 +1,6 @@
 # Nextcloud-Server
 
-[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running [Nextcloud Files](https://nextcloud.com/files/) file synchronization and sharing server, with a new [Amazon S3](https://aws.amazon.com/s3/) bucket as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection. Includes option to mount existing S3 bucket.
+[AWS CloudFormation](https://aws.amazon.com/cloudformation/) template that provisions an EC2 instance running [Nextcloud Files](https://nextcloud.com/files/) file synchronization and sharing server, with a new [Amazon S3](https://aws.amazon.com/s3/) bucket as primary storage and [AWS Backup](https://aws.amazon.com/s3/) for data protection, with option to mount existing S3 bucket.
 
 ## Notice
 
@@ -10,20 +10,40 @@ The template offers the option to install [Webmin](https://github.com/webmin/web
 
 Usage of template indicates acceptance of license agreements of all software that is installed in the EC2 instance. 
 
-## About CloudFormation template
-
-### Installation method
-
-This template uses [Nextcloud .tar archive](https://nextcloud.com/install/) to install Nextcloud, which is a [recommended installation
-method](https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html).
-
-### Architecture diagram
+## Architecture diagram
 
 <img alt="architecture" src="nextcloud-server.png">
 
 *Solution can be deployed in a private subnet for internal only use.*
 
-### Requirements
+## Overview of features
+The template provides the following features:
+- [Ubuntu](https://ubuntu.com/aws)/[Ubuntu Pro](https://aws.amazon.com/about-aws/whats-new/2023/04/amazon-ec2-ubuntu-pro-subscription-model/) 24.04/22.04 (x86_64/arm64)
+- Nextcloud
+  - Nextcloud .tar archive [installation method](https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html)
+  - Amazon S3 [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3)
+  - Redis [transaction file locking](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/files_locking_transactional.html)
+  - Docker Engine with [HaRP](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp) for [AppAPI and External Apps (ExApps)](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html)
+  - NVIDIA GPU driver and NVIDIA Container toolkit for [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) support (x86_64 NVIDIA GPU EC2 instance)
+- Applications
+  - [Apache](https://www.apache.org/) web server
+  - [MariaDB](https://mariadb.org/) or [MySQL](https://www.mysql.com/) database server
+  - [PHP 8.x](https://launchpad.net/~ondrej/+archive/ubuntu/php/) from [Ondřej Surý's](https://deb.sury.org/) [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) repository
+  - [AWS CLI v2](https://aws.amazon.com/cli/) with [auto-prompt](https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-parameters-prompting.html)
+  - [Amazon CloudWatch](https://aws.amazon.com/cloudwatch/) agent
+  - [Certbot](https://certbot.eff.org/) for [free HTTPS certificate](#ssltls-certificate-on-ec2-instance)
+    - [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone access for [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/en/stable/) DNS plugin use (optional)
+- Remote Administration
+  - [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html)  secure terminal access 
+  - [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-linux-inst-eic.html) in-browser SSH access
+  - [Amazon DCV](https://aws.amazon.com/hpc/dcv/) remote display protocol server for graphical desktop access (optional)
+  - [Webmin](https://webmin.com/) web-based system administration (optional)
+- AWS Services
+  - [AWS Backup](https://aws.amazon.com/backup/) to protect EC2 instance and S3 data (optional)
+  - [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with SSL/TLS certificate from [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) (optional)
+  - [Amazon CloudFront](https://aws.amazon.com/cloudfront/) CDN with support for [VPC Origin](https://aws.amazon.com/blogs/networking-and-content-delivery/introducing-cloudfront-virtual-private-cloud-vpc-origins-shield-your-web-applications-from-public-internet/) (optional)
+
+## Requirements
 
 Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html),
 
@@ -32,7 +52,7 @@ Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest
 
 ## Deploying using CloudFormation console
 
-Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and login to AWS [CloudFormation console](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template). 
+Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and login to AWS [CloudFormation console](https://console.aws.amazon.com/cloudformation/home#/stacks/create/template).
 
 Start the [Create Stack wizard](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html#cfn-using-console-initiating-stack-creation) by choosing **Create Stack**. [Select stack template](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html) by selecting **Upload a template file**, **Choose File**, select your `.yaml` file and click **Next**. Enter a **Stack name** and specify parameters values. 
 
@@ -46,7 +66,7 @@ EC2 instance
 - `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `m6g.xlarge`. 
 - `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
 
-*To use Nextcloud [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) features, select x86_64 `osVersion` and x86_64 [NVIDIA GPU](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-driver-instance-type) `instancetype`. Template will [install](https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/install-nvidia-gpu-driver-cuda-toolkit-nvidia-container-toolkit-on-amazon-ec2-instances-running-ubuntu-linux) required NVIDIA GPU drivers and software*
+*To use Nextcloud [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) features, select x86_64 `osVersion` and x86_64 [NVIDIA GPU](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-driver-instance-type) `instanceType`. Template will [install](https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/install-nvidia-gpu-driver-cuda-toolkit-nvidia-container-toolkit-on-amazon-ec2-instances-running-ubuntu-linux) required NVIDIA GPU drivers and software*
 
 EC2 Network
 
@@ -108,7 +128,7 @@ EBS
 
 AWS Backup
 
-- `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. [Versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) must be enabled on S3 bucket mounted as external storage before [AWS Backup](https://docs.aws.amazon.com/AmazonS3/latest/userguide/backup-for-s3.html) can back it up. Default is `EC2-and-S3` 
+- `backupResource`: option to backup EC2 instance, S3 bucket, existing S3 bucket mounted as external storage, or none. [Versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) must be enabled on S3 bucket mounted as external storage before [AWS Backup](https://docs.aws.amazon.com/AmazonS3/latest/userguide/backup-for-s3.html) can back it up. Default is `EC2` 
 - `scheduleExpression`: CRON expression specifying when AWS Backup initiates a backup job. Default is `cron(0 1 ? * * *)`
 - `scheduleExpressionTimezone`: timezone in which the schedule expression is set. Default is `Etc/UTC`
 - `deleteAfterDays`: number of days after creation that a recovery point is deleted. Default is `35` days
@@ -123,6 +143,7 @@ The following are available in **Outputs** section
 - `EC2instanceConnect`: [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
 - `EC2iamRole`: [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) URL link to manage permissions
 - `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
+- `NextcloudAdminUsername`: Nextcloud admin login user name
 - `SetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password). Default password is `EC2instanceID` value
 - `SSMsessionManager` or `SSMsessionManagerDCV`: [SSM Session Manager](https://aws.amazon.com/blogs/aws/new-session-manager/) URL link
 - `WebUrl`: EC2 web server URL link
@@ -282,7 +303,11 @@ Use `ec2IamRole` link to modify EC2 role inline permission. Change `aws:SourceIp
 }
 ```
 
-An [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) is used for S3 external storage access. Using EC2 IAM role for external storage currently generates errors in nextcloud.log. ([Issue #46400](https://github.com/nextcloud/server/issues/46400)) The IAM user can be located in CloudFormation **Resources** section where `Logical ID` is **iamUser**, and you may want to configure the associated policy `aws:SourceIp` value. You can modify its permission to mount additional S3 buckets; the security credentials are located in `/root/.nextcloud-credentials` on EC2 instance. 
+An [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) with attached [policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#inline-policies) is used for S3 external storage access. Using EC2 IAM role for external storage currently generates errors in nextcloud.log. ([Issue #46400](https://github.com/nextcloud/server/issues/46400)) The IAM user can be located in CloudFormation **Resources** section where `Logical ID` is **iamUser**, and you may want to configure the associated policy `aws:SourceIp` value. You can modify its permission to mount additional S3 buckets.
+
+### Security Credentials
+
+Database login, HaRP shared key and IAM user credentials are stored in `/home/ubuntu/next-credentials` file
 
 ### Sensitive data protection
 

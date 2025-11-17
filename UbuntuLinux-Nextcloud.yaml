@@ -125,7 +125,7 @@ Metadata:
       albIpAddressType:
         default: "IPv4 only, IPv6 only or dual stack (IPv4-and-IPv6)"
       albSubnets:
-        default: "Subnets for ALB. Select at least 2 in EC2 VPC. **Select a subnet even if not deploying ALB**"
+        default: "Subnets for ALB. Select at least 2 in EC2 VPC. ** IMPORTANT! Select a subnet even if not deploying ALB **"
 
       albCertificateArn:
         default: "Certificate ARN"
@@ -402,6 +402,7 @@ Parameters:
       - ap-southeast-3
       - ap-southeast-4
       - ap-southeast-5
+      - ap-southeast-6
       - ap-southeast-7
       - ca-central-1
       - ca-west-1
@@ -442,7 +443,7 @@ Parameters:
     Description: https://github.com/nextcloud/server/issues/40539
     MinValue: 10
     MaxValue: 16384
-    Default: 100
+    Default: 70
   volumeType:
     Type: String
     Description: https://aws.amazon.com/ebs/general-purpose/
@@ -460,7 +461,7 @@ Parameters:
       - EC2-and-S3
       - All
       - none
-    Default: "EC2-and-S3"
+    Default: "EC2"
   scheduleExpression:
     Type: String
     Description: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-scheduled-rule-pattern.html
@@ -1648,6 +1649,7 @@ Resources:
                 apt-get update -q
                 apt-get upgrade -q -y
                 apt-get autoremove -q -y
+                apt-get install -q -y wget tmux unzip tar curl sed
 
                 # CloudWatch agent: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-commandline-fleet.html#download-CloudWatch-Agent-on-EC2-Instance-commandline-fleet
                 if (arch | grep -q x86); then
@@ -1820,6 +1822,34 @@ Resources:
               ignoreErrors: "true"
         10_nextcloud_install:
           files:
+            "/opt/docker/compose.yaml":
+              content: |
+                services:
+                  nextcloud-appapi-harp:
+                    container_name: appapi-harp
+                    hostname: appapi-harp
+                    image: ghcr.io/nextcloud/nextcloud-appapi-harp:release
+                    network_mode: "host"
+                    restart: always
+                    volumes:
+                      - /var/run/docker.sock:/var/run/docker.sock
+                      - /opt/docker/certs:/certs
+                    environment:
+                      - HP_SHARED_KEY=hp_shared_key
+                      - NC_INSTANCE_URL=http://127.0.0.1
+              mode: "000640"
+              owner: "ubuntu"
+              group: "ubuntu"
+            "/etc/systemd/system/docker.service.d/override.conf":
+              content: |
+
+                [Service]
+                Environment=
+                Environment=DOCKER_MIN_API_VERSION=1.41
+
+              mode: "000644"
+              owner: "root"
+              group: "root"
             "/root/install-nextcloud.sh":
               content: !Sub |
                 #!/bin/bash
@@ -1845,6 +1875,9 @@ Resources:
                 apt-get install -q -y ${phpVersion}-{igbinary,msgpack,zstd,lz4,bz2}
                 apt-get install -q -y ${phpVersion}-{smbclient,gmp}
                 apt-get install -q -y ${phpVersion}-ldap
+
+                # APCU: https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/caching_configuration.html#id1
+                sed -i "^extension/a apc.shm_size=128M" /etc/php/$PHP_VERSION/mods-available/apcu.ini
 
                 # Redis for caching and session state
                 apt-get install -q -y redis-server
@@ -1938,6 +1971,9 @@ Resources:
                 find /var/www/html -type d -exec sudo chmod 2775 {} \;
                 find /var/www/html -type f -exec sudo chmod 0664 {} \;
 
+                # Cloudwatch log
+                usermod -aG www-data cwagent
+
                 # Nextcloud
                 a2enmod headers
                 a2enmod env
@@ -1994,11 +2030,12 @@ Resources:
                 chown -R www-data:www-data /var/www/html/
 
                 # Generate random MySQL/MariaDB password
-                export rndPassword=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1`
-                echo "Password = $rndPassword" >> /root/.nextcloud-credentials
+                apt-get install -q -y pwgen
+                DB_USER_PW=$(pwgen -c -n -y -r "\/\'\"\`" 16)
+                echo "Password = $DB_USER_PW" >> /home/ubuntu/nextcloud-credentials
 
                 # Prepare database
-                sudo mysql -u root -e "CREATE USER 'nextcloud'@'localhost' IDENTIFIED BY '$rndPassword';
+                sudo mysql -u root -e "CREATE USER 'nextcloud'@'localhost' IDENTIFIED BY '$DB_USER_PW';
                 CREATE DATABASE IF NOT EXISTS nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
                 GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost';
                 FLUSH PRIVILEGES;"
@@ -2007,7 +2044,7 @@ Resources:
                 cd /var/www/html/
                 sudo -u www-data php occ maintenance:install \
                  --database='mysql' --database-name='nextcloud' \
-                 --database-user='nextcloud' --database-pass="$rndPassword" \
+                 --database-user='nextcloud' --database-pass="$DB_USER_PW" \
                  --admin-user='${adminUsername}' --admin-pass=$(cat /var/lib/cloud/data/instance-id)
 
                 # nextcloud.occ
@@ -2072,6 +2109,11 @@ Resources:
                 systemctl enable docker
                 usermod -aG docker ubuntu
 
+                if (lsb_release -r -s | grep -q 22); then
+                  update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
+                  update-alternatives --config gcc
+                fi
+
                 # GPU driver for G/P instance : https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/
                 apt-get install -q -y amazon-ec2-utils
                 if ( ec2-metadata -t | grep -q "\ [g|p]" ); then
@@ -2086,30 +2128,35 @@ Resources:
                   apt-get install -y ./cuda-keyring_1.1-1_all.deb
                   apt-get update
                   
-                  # Ubuntu ERD: https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/
-                  VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
-                  apt-get install -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server             
+                  if ( ec2-metadata -t | grep -q 6f\. ); then
+                    aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ . --no-sign-request
+                    chmod +x NVIDIA-Linux-x86_64*.run
+                    ./NVIDIA-Linux-x86_64*.run -s
+                  else
+                    # Ubuntu ERD: https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/
+                    VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
+                    apt-get install -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server             
+                  fi
 
                   # For ExApps: https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/faq/GpuSupport.html
                   sudo apt-get install -y nvidia-container-toolkit
                   sudo nvidia-ctk runtime configure --runtime=docker
                   sudo systemctl restart docker
+
+                  # Unattended
+                  apt-get install -q -y unattended-upgrades
+                  sed -i '/\/\/Unattended-Upgrade::Automatic-Reboot "false";/a Unattended-Upgrade::Automatic-Reboot "true";' /etc/apt/apt.conf.d/50unattended-upgrades
                 fi
 
                 # HaRP: https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp
                 # https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/DeployConfigurations.html#nextcloud-and-docker-on-the-same-host-with-nextcloud-bare-metal
-                HP_SHARED_KEY=$(cat /var/lib/cloud/data/instance-id)
-                mkdir -p /var/www/certs
-                chmod og+rw /var/www/certs
-                docker run \
-                  -e HP_SHARED_KEY="$HP_SHARED_KEY" \
-                  -e NC_INSTANCE_URL="http://127.0.0.1" \
-                  -v /var/run/docker.sock:/var/run/docker.sock \
-                  -v /var/www/certs:/certs \
-                  --name appapi-harp -h appapi-harp \
-                  --restart always \
-                  --network host \
-                  -d ghcr.io/nextcloud/nextcloud-appapi-harp:release
+                apt-get install -q -y pwgen
+                HP_SHARED_KEY=$(pwgen -c -n -y -r "\/\'\"\`" 16)
+                echo "HARP Proxy Password = $HP_SHARED_KEY" >> /home/ubuntu/nextcloud-credentials
+
+                sed -i "s/hp_shared_key/$HP_SHARED_KEY/g" /opt/docker/compose.yaml
+                cd /opt/docker
+                docker compose up -d --quiet-pull
 
                 # Apache Reverse Proxy
                 sed -i '/<\/VirtualHost>/d' /etc/apache2/sites-enabled/default-ssl.conf
@@ -2122,7 +2169,7 @@ Resources:
 
                 systemctl restart apache2
 
-                # Register Deploy Daemons
+                # Register Deploy Daemon
                 if ( ec2-metadata -t | grep -q "\ [g|p]" ); then
                   COMPUTE_DEVICE=cuda
                 else
@@ -2209,7 +2256,7 @@ Resources:
                         'hostname' => 's3.${AWS::Region}.amazonaws.com',
                         'storageClass' => '${s3StorageClass}',
                         'uploadPartSize' => '524288000',
-                        'verify_bucket_exists' => false,
+                        'verify_bucket_exists' => true,
                         'use_ssl' => true
                       ),
                     ),
@@ -2229,7 +2276,7 @@ Resources:
               mode: "000640"
               owner: "root"
               group: "root"
-            "/root/.nextcloud-credentials":
+            "/home/ubuntu/nextcloud-credentials":
               content: !Sub |
                 IAM User: ${iamUser}
                 ACCESS_KEY = ${userAccessKey}
@@ -2238,8 +2285,8 @@ Resources:
                 Database User: nextcloud
 
               mode: "000400"
-              owner: "root"
-              group: "root"
+              owner: "ubuntu"
+              group: "ubuntu"
           commands:
             install:
               command: "/root/install-nextcloud.sh > /var/log/install-nextcloud.log 2>&1"
@@ -2307,9 +2354,10 @@ Resources:
           systemctl stop apt-daily.timer apt-daily-upgrade.timer
           apt-get clean all
           apt-get update -q
-          sleep 10
+          sleep 15
           apt-get install -q -y procps
           pkill apt
+          pkill dpkg
           apt-get install -q -y wget tmux unzip tar curl sed
 
           # CfN scripts: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html
@@ -2730,7 +2778,11 @@ Outputs:
         !Sub "https://${ec2Instance.PrivateIp}:10000",
       ]
 
-  NextcloudLogUrl:
+  NextcloudAdminUsername:
+    Description: Nextcloud admin username
+    Value: !Ref adminUsername
+
+  NextcloudLog:
     Description: Cloudwatch log for nextcloud.log
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/nextcloud.log/log-events/${ec2Instance}"
 
