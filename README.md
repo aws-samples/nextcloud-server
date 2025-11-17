@@ -20,7 +20,7 @@ By using the template, you accept license agreement of all software that is inst
 The template provides the following features:
 - [Ubuntu](https://ubuntu.com/aws)/[Ubuntu Pro](https://aws.amazon.com/about-aws/whats-new/2023/04/amazon-ec2-ubuntu-pro-subscription-model/) 24.04/22.04 (x86_64/arm64)
 - Nextcloud
-  - Nextcloud .tar archive [installation method](https://docs.nextcloud.com/server/latest/admin_manual/installation/source_installation.html)
+  - Nextcloud .tar archive [installation](https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html)
   - Amazon S3 [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3)
   - Redis [transaction file locking](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/files_locking_transactional.html)
   - Docker Engine with [HaRP](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp) for [AppAPI and External Apps (ExApps)](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html)
@@ -45,7 +45,7 @@ The template provides the following features:
 
 ## Requirements
 
-Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/latest/admin_manual/installation/system_requirements.html),
+Besides Nextcloud [system requirements](https://docs.nextcloud.com/server/stable/admin_manual/installation/system_requirements.html),
 
 - EC2 instance must be provisioned in a subnet with outbound IPv4 internet connectivity. 
 - To use [Application Load Balancer (ALB)](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with HTTPS, either [request a public certificate](https://docs.aws.amazon.com/acm/latest/userguide/acm-public-certificates.html) or [import a certificate](https://docs.aws.amazon.com/acm/latest/userguide/import-certificate.html) into [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/)
@@ -66,7 +66,7 @@ EC2 instance
 - `instanceType`: EC2 [instance type](https://aws.amazon.com/ec2/instance-types/). Do ensure type matches selected processor architecture. Default is `m6g.xlarge`. 
 - `ec2TerminationProtection`: enable [EC2 termination protection](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) to prevent accidental deletion. Default is `Yes`
 
-*To use Nextcloud [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) features, select x86_64 `osVersion` and x86_64 [NVIDIA GPU](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-driver-instance-type) `instanceType`. Template will [install](https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/install-nvidia-gpu-driver-cuda-toolkit-nvidia-container-toolkit-on-amazon-ec2-instances-running-ubuntu-linux) required NVIDIA GPU drivers and software*
+*To use Nextcloud [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) feature, select x86_64 `osVersion` and x86_64 [NVIDIA GPU](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-driver-instance-type) `instanceType`. Template will [install](https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/install-nvidia-gpu-driver-cuda-toolkit-nvidia-container-toolkit-on-amazon-ec2-instances-running-ubuntu-linux) required NVIDIA GPU drivers and software*
 
 EC2 Network
 
@@ -117,7 +117,7 @@ S3
 
 S3 External Storage
 
-- `externalS3Bucket` (optional): option to mount existing S3 bucket within Nextcloud as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html). Specify bucket name in your account
+- `externalS3Bucket` (optional): option to mount existing S3 bucket within Nextcloud as [external storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/external_storage_configuration_gui.html). Specify bucket name in your account
 - `externalS3BucketRegion`: [AWS Region](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-regions) where `externalS3Bucket` is located
 - `externalS3BucketStorageClass`: [S3 storage class](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html)
 
@@ -230,17 +230,17 @@ To troubleshoot any installation issue, you can view contents of the following l
 
 ### Sending email
 
-Nextcloud supports [email server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html) for password reset and activity notifications. You can configure Nextcloud to use [external SMTP server](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-an-smtp-server) (e.g. [Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/send-email-smtp.html)), or [sendmail](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html#configuring-sendmail-qmail).
+Nextcloud supports [email server](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/email_configuration.html) for password reset and activity notifications. You can configure Nextcloud to use [external SMTP server](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/email_configuration.html#configuring-an-smtp-server) (e.g. [Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/send-email-smtp.html)), or [sendmail](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/email_configuration.html#configuring-sendmail-qmail).
 
 When configuring external SMTP server, use 465, 587 or supported port number that is not 25. Amazon EC2 [restricts](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-resource-limits.html#port-25-throttle) email sending using port 25 on all instances by default. You can request that this restriction be removed if you are using port 25 for external SMTP server or sendmail. Refer to [How do I remove the restriction on port 25 from my Amazon EC2 instance or Lambda function?](https://repost.aws/knowledge-center/ec2-port-25-throttle) for more information.
 
 ### Using the occ command
 
-The [occ](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/occ_command.html) command is Nextcloud's command-line interface. It is used to perform common server operations such as installing and upgrading Nextcloud, and must be run as HTTP user, i.e. `sudo -u www-data php /var/www/html/occ`. On the EC2 instance, you can use the alias `occ`.
+The [occ](https://docs.nextcloud.com/server/stable/admin_manual/occ_command.html) command is Nextcloud's command-line interface. It is used to perform common server operations such as installing and upgrading Nextcloud, and must be run as HTTP user, i.e. `sudo -u www-data php /var/www/html/occ`. On the EC2 instance, you can use the alias `occ`.
 
 ### Mounting external storage services as external storage
 
-Nextcloud [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount external storage services including Windows file servers and S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage_configuration_gui.html#available-storage-backends) for details.
+Nextcloud [external storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/external_storage_configuration_gui.html) feature enables you to mount external storage services including Windows file servers and S3 buckets as secondary storage devices. Refer to [NextCloud documentation](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/external_storage_configuration_gui.html#available-storage-backends) for details.
 
 ### Client app downloads
 
@@ -261,10 +261,10 @@ Nextcloud is mentioned by the following blog posts
 
 ### S3 primary storage
 
-Amazon S3 is used to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html) provides [performance benefits](
-https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/external_storage/amazons3.html), including support for [large file uploads](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html#large-file-upload-on-object-storage).
+Amazon S3 is used to provide almost unlimited, cost-effective and [durable](https://aws.amazon.com/s3/faqs/#Durability_.26_Data_Protection) storage over EBS. Using S3 as [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html) provides [performance benefits](
+https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#performance-implications) over S3 as [external storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/external_storage/amazons3.html), including support for [large file uploads](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/big_file_upload_configuration.html#large-file-upload-on-object-storage).
 
-Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
+Note that files are not accessible outside of NextCloud as all metadata (filenames, directory structures, etc) is stored in MariaDB/MySQL database on EC2 instance. The S3 bucket holds the file content by unique identifier and *not* filename. This has implications for [data backup and recovery](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#data-backup-and-recovery-implications), and it is important to backup both EC2 instance and S3 bucket data. 
 
 ### Restoring from backup
 
