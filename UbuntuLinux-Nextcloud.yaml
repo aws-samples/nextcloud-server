@@ -1338,7 +1338,7 @@ Resources:
             Status: Enabled
           - Id: Delete-Previous-Versions
             NoncurrentVersionExpiration:
-              NoncurrentDays: 1
+              NoncurrentDays: 2
             Status: Enabled
           - Id: Delete-Expired-Delete-Marker
             ExpiredObjectDeleteMarker: true
@@ -2129,13 +2129,20 @@ Resources:
                   apt-get update
                   
                   if ( ec2-metadata -t | grep -q 6f\. ); then
+                    # NVIDIA GRID: https://repost.aws/articles/ARBXrCH5wuStKWCXfIDdG4Ig/
+                    apt-get install -q -y dkms linux-headers-aws linux-modules-extra-aws unzip gcc make libglvnd-dev pkg-config
                     aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ . --no-sign-request
                     chmod +x NVIDIA-Linux-x86_64*.run
-                    ./NVIDIA-Linux-x86_64*.run -s
+                    KERNEL_VERSION=$(ls -a /lib/modules | sort -V -r | head -n 1)                   
+                    if (! uname -r | grep -q $KERNEL_VERSION ); then
+                      sudo ./NVIDIA-Linux-x86_64*.run -s --kernel-source-path=/lib/modules/$KERNEL_VERSION/build --kernel-name=$KERNEL_VERSION --skip-module-load
+                    else
+                      sudo ./NVIDIA-Linux-x86_64*.run -s
+                    fi
                   else
-                    # Ubuntu ERD: https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/
+                    # Ubuntu ERD
                     VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
-                    apt-get install -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server             
+                    apt-get install -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server
                   fi
 
                   # For ExApps: https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/faq/GpuSupport.html
