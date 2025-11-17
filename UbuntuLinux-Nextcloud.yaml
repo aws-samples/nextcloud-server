@@ -2031,7 +2031,7 @@ Resources:
 
                 # Generate random MySQL/MariaDB password
                 apt-get install -q -y pwgen
-                DB_USER_PW=$(pwgen -c -n -y -r "\/\'\"\`" 16)
+                DB_USER_PW=$(pwgen -c -n -y -r "\/\'\"\`\&\:" 16)
                 echo "Password = $DB_USER_PW" >> /home/ubuntu/nextcloud-credentials
 
                 # Prepare database
@@ -2151,7 +2151,7 @@ Resources:
                 # HaRP: https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp
                 # https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/DeployConfigurations.html#nextcloud-and-docker-on-the-same-host-with-nextcloud-bare-metal
                 apt-get install -q -y pwgen
-                HP_SHARED_KEY=$(pwgen -c -n -y -r "\/\'\"\`" 16)
+                HP_SHARED_KEY=$(pwgen -c -n -y -r "\/\'\"\`\&\:" 16)
                 echo "HARP Proxy Password = $HP_SHARED_KEY" >> /home/ubuntu/nextcloud-credentials
 
                 sed -i "s/hp_shared_key/$HP_SHARED_KEY/g" /opt/docker/compose.yaml
