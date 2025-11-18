@@ -56,7 +56,10 @@ Download [UbuntuLinux-Nextcloud.yaml](UbuntuLinux-Nextcloud.yaml) file, and logi
 
 Start the [Create Stack wizard](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html#cfn-using-console-initiating-stack-creation) by choosing **Create Stack**. [Select stack template](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-using-console-create-stack-template.html) by selecting **Upload a template file**, **Choose File**, select your `.yaml` file and click **Next**. Enter a **Stack name** and specify parameters values. 
 
-### Parameter options
+### CloudFormation Parameters
+
+The default options will deploy an EC2 instance with AWS Backup for EC2 instance data protection. You will need to specify values for `ec2KeyPair`, `vpcID`, `subnetID` and `albSubnets`.
+
 
 EC2 instance
 
