@@ -343,11 +343,11 @@ To remove created resources,
 - [Disable](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_ChangingDisableAPITermination.html) EC2 instance termination protection (if enabled)
 - [Delete](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-delete-stack.html) CloudFormation stack
 
-## Other options
+## Other S3 access options
 
-If you need a simple web interface for end users to transfer data into and out of S3, conside [AWS Transfer Family web apps](https://aws.amazon.com/aws-transfer-family/web-apps/). Refer to blog [Announcing AWS Transfer Family web apps for fully managed Amazon S3 file transfers](https://aws.amazon.com/blogs/aws/announcing-aws-transfer-family-web-apps-for-fully-managed-amazon-s3-file-transfers/) for information.
+If you need a simple web interface for end users to transfer data into and out of S3, consider [AWS Transfer Family web apps](https://aws.amazon.com/aws-transfer-family/web-apps/). Refer to blog [Announcing AWS Transfer Family web apps for fully managed Amazon S3 file transfers](https://aws.amazon.com/blogs/aws/announcing-aws-transfer-family-web-apps-for-fully-managed-amazon-s3-file-transfers/) for information.
 
-To mount S3 bucket as a local file system, consider [Mountpoint for Amazon S3](https://aws.amazon.com/s3/features/mountpoint/).
+You can also use [AWS Transfer Family](https://aws.amazon.com/aws-transfer-family/) for [SFTP](https://docs.aws.amazon.com/transfer/latest/userguide/tf-server-endpoint.html) with a S3 bucket. To mount S3 bucket as a local file system, consider [Mountpoint for Amazon S3](https://aws.amazon.com/s3/features/mountpoint/).
 
 ## Security
 
