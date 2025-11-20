@@ -21,7 +21,7 @@ The template provides the following features:
 - [Ubuntu](https://ubuntu.com/aws)/[Ubuntu Pro](https://aws.amazon.com/about-aws/whats-new/2023/04/amazon-ec2-ubuntu-pro-subscription-model/) 24.04/22.04 (x86_64/arm64)
 - Nextcloud
   - Nextcloud .tar archive [installation](https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html)
-  - Amazon S3 [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3)
+  - Amazon S3 [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3) and [external storage (optional)](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/external_storage/amazons3.html)
   - Redis [transaction file locking](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/files_locking_transactional.html)
   - Docker Engine with [HaRP](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp) for [AppAPI and External Apps (ExApps)](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html)
   - NVIDIA GPU driver and NVIDIA Container toolkit for [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) (x86_64 NVIDIA GPU EC2 instance)
@@ -30,7 +30,7 @@ The template provides the following features:
   - [MariaDB](https://mariadb.org/) or [MySQL](https://www.mysql.com/) database server
   - [PHP 8.x](https://launchpad.net/~ondrej/+archive/ubuntu/php/) from [Ondřej Surý's](https://deb.sury.org/) [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) repository
   - [AWS CLI v2](https://aws.amazon.com/cli/) with [auto-prompt](https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-parameters-prompting.html)
-  - [Amazon CloudWatch](https://aws.amazon.com/cloudwatch/) agent
+  - [Amazon CloudWatch](https://aws.amazon.com/cloudwatch/) monitoring
   - [Certbot](https://certbot.eff.org/) for [free HTTPS certificate](#ssltls-certificate-on-ec2-instance)
     - [Amazon Route 53](https://aws.amazon.com/route53/) hosted zone access for [certbot-dns-route53](https://certbot-dns-route53.readthedocs.io/en/stable/) DNS plugin use (optional)
 - Remote Administration
@@ -41,7 +41,6 @@ The template provides the following features:
 - AWS Services
   - [AWS Backup](https://aws.amazon.com/backup/) to protect EC2 instance and S3 data (optional)
   - [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/) with SSL/TLS certificate from [AWS Certificate Manager](https://aws.amazon.com/certificate-manager/) (optional)
-  - [Amazon CloudFront](https://aws.amazon.com/cloudfront/) CDN with support for [VPC Origin](https://aws.amazon.com/blogs/networking-and-content-delivery/introducing-cloudfront-virtual-private-cloud-vpc-origins-shield-your-web-applications-from-public-internet/) (optional)
 
 ## Requirements
 
