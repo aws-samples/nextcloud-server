@@ -19,7 +19,7 @@ By using the template, you accept license agreement of all software that is inst
 ## Overview of features
 The template provides the following features:
 - [Ubuntu](https://ubuntu.com/aws)/[Ubuntu Pro](https://aws.amazon.com/about-aws/whats-new/2023/04/amazon-ec2-ubuntu-pro-subscription-model/) 24.04/22.04 (x86_64/arm64)
-- Nextcloud
+- [Nextcloud Files](https://nextcloud.com/files/)
   - Nextcloud .tar archive [installation](https://docs.nextcloud.com/server/stable/admin_manual/installation/source_installation.html)
   - Amazon S3 [primary storage](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3) and [external storage (optional)](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/external_storage/amazons3.html)
   - Redis [transaction file locking](https://docs.nextcloud.com/server/stable/admin_manual/configuration_files/files_locking_transactional.html)
