@@ -2141,9 +2141,26 @@ Resources:
                       sudo ./NVIDIA-Linux-x86_64*.run -s
                     fi
                   else
-                    # Ubuntu ERD
+                    # Ubuntu pre-compiled NVIDIA modules : https://ubuntu.com/server/docs/nvidia-drivers-installation
                     VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
-                    apt-get install -q -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server             
+                    apt-get install -q -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server
+                    apt-get install -q -y nvidia-settings
+  
+                    # P instance: https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/#optional-installing-fabric-manager-and-the-nscq-library
+                    # https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/
+                    if ( ec2-metadata -t | grep -q " p[0-9]" ); then
+                      apt-get install -q -y nvidia-fabricmanager-$VERSION libnvidia-nscq-$VERSION
+                      apt-get install -q -y nvidia-imex-$VERSION
+                      if ( ec2-metadata -t | grep -q " p6" ); then
+                        if ( arch | grep -q x86_64 ); then
+                          apt-get install -q -y nvlsm
+                          apt-get install -q -y infiniband-diags
+                          echo "ib_umad" | tee -a /etc/modules-load.d/modules.conf
+                          modprobe ib_umad
+                        fi
+                      fi
+                      systemctl enable --now nvidia-fabricmanager
+                    fi
                   fi
 
                   # For ExApps: https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/faq/GpuSupport.html
