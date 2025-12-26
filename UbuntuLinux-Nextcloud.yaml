@@ -2115,8 +2115,22 @@ Resources:
                 fi
 
                 # GPU driver for G/P instance : https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/
+                apt-get install -q -y pciutils
                 apt-get install -q -y amazon-ec2-utils
-                if ( ec2-metadata -t | grep -q "\ [g|p]" ); then
+                if ( lspci | grep -q NVIDIA ); then
+                  cd /tmp
+
+                  # Disable Nouveau: https://docs.nvidia.com/ai-enterprise/deployment-guide-vmware/0.1.0/nouveau.html#ubuntu
+                  if (! cat /etc/modprobe.d/blacklist.conf | grep -q nouveau); then
+                    echo "blacklist vga16fb" >> /etc/modprobe.d/blacklist.conf
+                    echo "blacklist nouveau" >> /etc/modprobe.d/blacklist.conf
+                    echo "blacklist rivafb" >> /etc/modprobe.d/blacklist.conf
+                    echo "blacklist nvidiafb" >> /etc/modprobe.d/blacklist.conf
+                    echo "blacklist rivatv" >> /etc/modprobe.d/blacklist.conf
+                  fi
+                  sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="rdblacklist=nouveau /g' /etc/default/grub
+                  update-grub
+
                   DISTRO=$(. /etc/os-release;echo $ID$VERSION_ID | sed -e 's/\.//g')
                   if (arch | grep -q x86); then
                     ARCH=x86_64
@@ -2133,6 +2147,14 @@ Resources:
                     apt-get install -q -y dkms linux-headers-aws linux-modules-extra-aws unzip gcc make libglvnd-dev pkg-config
                     aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ . --no-sign-request
                     chmod +x NVIDIA-Linux-x86_64*.run
+
+                    if (lsb_release -r -s | grep -q 22); then
+                      if (cat /proc/version | grep -q gcc-12); then
+                        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
+                        sudo update-alternatives --config gcc
+                      fi
+                    fi
+
                     KERNEL_VERSION=$(ls -a /lib/modules | sort -V -r | head -n 1)                    
                     if (! uname -r | grep -q $KERNEL_VERSION ); then
                       sudo ./NVIDIA-Linux-x86_64*.run -s --kernel-source-path=/lib/modules/$KERNEL_VERSION/build --kernel-name=$KERNEL_VERSION --skip-module-load
@@ -2145,19 +2167,17 @@ Resources:
                     VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
                     apt-get install -q -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server
                     apt-get install -q -y nvidia-settings
-  
+
                     # P instance: https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/#optional-installing-fabric-manager-and-the-nscq-library
                     # https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/
                     if ( ec2-metadata -t | grep -q " p[0-9]" ); then
                       apt-get install -q -y nvidia-fabricmanager-$VERSION libnvidia-nscq-$VERSION
                       apt-get install -q -y nvidia-imex-$VERSION
                       if ( ec2-metadata -t | grep -q " p6" ); then
-                        if ( arch | grep -q x86_64 ); then
-                          apt-get install -q -y nvlsm
-                          apt-get install -q -y infiniband-diags
-                          echo "ib_umad" | tee -a /etc/modules-load.d/modules.conf
-                          modprobe ib_umad
-                        fi
+                        apt-get install -q -y nvlsm
+                        apt-get install -q -y infiniband-diags
+                        echo "ib_umad" | tee -a /etc/modules-load.d/modules.conf
+                        modprobe ib_umad
                       fi
                       systemctl enable --now nvidia-fabricmanager
                     fi
