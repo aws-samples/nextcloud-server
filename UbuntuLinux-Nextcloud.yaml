@@ -2145,35 +2145,33 @@ Resources:
                   if ( ec2-metadata -t | grep -q 6f\. ); then
                     # NVIDIA GRID: https://repost.aws/articles/ARBXrCH5wuStKWCXfIDdG4Ig/
                     apt-get install -q -y dkms linux-headers-aws linux-modules-extra-aws unzip gcc make libglvnd-dev pkg-config
-                    aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ . --no-sign-request
-                    chmod +x NVIDIA-Linux-x86_64*.run
 
                     if (lsb_release -r -s | grep -q 22); then
                       if (cat /proc/version | grep -q gcc-12); then
-                        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
-                        sudo update-alternatives --config gcc
+                        update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12
+                        update-alternatives --config gcc
                       fi
                     fi
 
+                    aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ . --no-sign-request
+                    chmod +x NVIDIA-Linux-x86_64*.run
+
                     KERNEL_VERSION=$(ls -a /lib/modules | sort -V -r | head -n 1)                    
                     if (! uname -r | grep -q $KERNEL_VERSION ); then
-                      sudo ./NVIDIA-Linux-x86_64*.run -s --kernel-source-path=/lib/modules/$KERNEL_VERSION/build --kernel-name=$KERNEL_VERSION --skip-module-load
-                      sudo dkms autoinstall
+                      ./NVIDIA-Linux-x86_64*.run -s --kernel-source-path=/lib/modules/$KERNEL_VERSION/build --kernel-name=$KERNEL_VERSION --skip-module-load
+                      dkms autoinstall
                     else 
-                      sudo ./NVIDIA-Linux-x86_64*.run -s
+                      ./NVIDIA-Linux-x86_64*.run -s
                     fi
                   else
-                    # Ubuntu pre-compiled NVIDIA modules : https://ubuntu.com/server/docs/nvidia-drivers-installation
                     VERSION=$(apt-cache search "nvidia-driver" | grep "^nvidia-driver-.*-server-open" | cut -d"-" -f3 | sort -r | head -1)
                     apt-get install -q -y linux-modules-nvidia-$VERSION-server-open-aws nvidia-headless-no-dkms-$VERSION-server-open nvidia-driver-$VERSION-server-open nvidia-utils-$VERSION-server
                     apt-get install -q -y nvidia-settings
 
-                    # P instance: https://documentation.ubuntu.com/server/how-to/graphics/install-nvidia-drivers/#optional-installing-fabric-manager-and-the-nscq-library
-                    # https://repost.aws/articles/ARWGxLArMBQ4y1MKoSHTq3gQ/
                     if ( ec2-metadata -t | grep -q " p[0-9]" ); then
                       apt-get install -q -y nvidia-fabricmanager-$VERSION libnvidia-nscq-$VERSION
                       apt-get install -q -y nvidia-imex-$VERSION
-                      if ( ec2-metadata -t | grep -q " p6" ); then
+                      if ( ec2-metadata -t | grep -q " p[6-9]" ); then
                         apt-get install -q -y nvlsm
                         apt-get install -q -y infiniband-diags
                         echo "ib_umad" | tee -a /etc/modules-load.d/modules.conf
@@ -2184,9 +2182,9 @@ Resources:
                   fi
 
                   # For ExApps: https://docs.nextcloud.com/server/stable/developer_manual/exapp_development/faq/GpuSupport.html
-                  sudo apt-get install -q -y nvidia-container-toolkit
-                  sudo nvidia-ctk runtime configure --runtime=docker
-                  sudo systemctl restart docker
+                  apt-get install -q -y nvidia-container-toolkit
+                  nvidia-ctk runtime configure --runtime=docker
+                  systemctl restart docker
 
                   # Unattended
                   apt-get install -q -y unattended-upgrades
