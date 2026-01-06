@@ -67,7 +67,7 @@ Metadata:
           - adminUsername
           - phpVersion
           - databaseOption
-          - r53ZoneID
+          - enableR53acmeSupport
       - Label:
           default: S3 Primary Storage
         Parameters:
@@ -151,8 +151,8 @@ Metadata:
         default: "Nextcloud admin username"
       phpVersion:
         default: "PHP version to install"
-      r53ZoneID:
-        default: "Route 53 hosted zone ID for certbot-dns-route53 access. Leave blank not to grant"
+      enableR53acmeSupport:
+        default: "Enable Route 53 ACME protocol DNS-01 challenge support"
       databaseOption:
         default: "Database server to install"
 
@@ -359,10 +359,13 @@ Parameters:
       - "MariaDB"
       - "MySQL"
     Default: "MariaDB"
-  r53ZoneID:
+  enableR53acmeSupport:
     Type: String
-    Description: https://console.aws.amazon.com/route53/v2/hostedzones ( aws route53 list-hosted-zones )
-    Default: "*"
+    Description: https://letsencrypt.org/docs/challenge-types https://certbot-dns-route53.readthedocs.io/
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Default: "Yes"
 
   s3StorageClass:
     Type: String
@@ -859,7 +862,7 @@ Conditions:
   installDCV: !Equals [!Ref installDCV, "Yes"]
   noDCV: !Not [!Condition installDCV]
   installWebmin: !Equals [!Ref installWebmin, "Yes"]
-  hasR53Zone: !Not [!Equals [!Ref r53ZoneID, ""]]
+  hasR53Zone: !Not [!Equals [!Ref enableR53acmeSupport, "Yes"]]
 
   enableS3BucketLogging: !Equals [!Ref enableS3BucketLogging, "Yes"]
   noS3BucketLogging: !Not [!Condition enableS3BucketLogging]
@@ -1095,7 +1098,7 @@ Resources:
                 - Effect: Allow
                   Action:
                     - route53:ChangeResourceRecordSets
-                  Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/${r53ZoneID}
+                  Resource: !Sub arn:${AWS::Partition}:route53:::hostedzone/*
                   Condition:
                     IpAddress:
                       aws:SourceIp: 0.0.0.0/0
@@ -1964,6 +1967,9 @@ Resources:
                 # Enable index.php
                 sed -i "s/\bDirectoryIndex\b/& index.php/" /etc/apache2/mods-enabled/dir.conf
 
+                # Redirect HTTP to HTTPS
+                sed -i '/\/VirtualHost/i RewriteEngine on\nRewriteRule ^ https:\/\/%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]' /etc/apache2/sites-enabled/000-default.conf
+
                 # Change permissions and ownership
                 usermod -a -G www-data ubuntu
                 chown -R ubuntu:www-data /var/www/html
@@ -2752,10 +2758,6 @@ Resources:
           Value: https://github.com/aws-samples/nextcloud-server
 
 Outputs:
-  SetPasswordCmd:
-    Description: Set Nextcloud admin password command
-    Value: !Sub "sudo -u www-data php /var/www/html/occ user:resetpassword ${adminUsername}"
-
   EC2console:
     Description: EC2 console
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#Instances:search=${ec2Instance}"
@@ -2780,18 +2782,12 @@ Outputs:
     Value: !Ref ec2Instance
 
   SSMsessionManager:
-    Condition: noDCV
-    Description: SSM Session Manager
+    Description: SSM Session Manager (" sudo passwd ubuntu " to change Ubuntu login user password)
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
 
-  SSMsessionManagerDCV:
+  DCVUrl:
     Condition: installDCV
-    Description: SSM Session Manager ("sudo passwd ubuntu" to set password for DCV login)
-    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
-
-  DCVwebConsole:
-    Condition: installDCV
-    Description: DCV web browser client (login as ubuntu)
+    Description: DCV URL (login as ubuntu)
     Value: !Sub
       - "https://${IpAddress}:8443/?username=ubuntu     ( dcv://ubuntu:@${IpAddress}:8443 )"
       - IpAddress:
@@ -2819,6 +2815,10 @@ Outputs:
         !Sub "https://${ec2Instance.PublicIp}:10000",
         !Sub "https://${ec2Instance.PrivateIp}:10000",
       ]
+
+  NextcloudSetPasswordCmd:
+    Description: Set Nextcloud admin login password command
+    Value: !Sub "sudo -u www-data php /var/www/html/occ user:resetpassword ${adminUsername}"
 
   NextcloudAdminUsername:
     Description: Nextcloud admin username
