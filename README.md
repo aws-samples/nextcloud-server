@@ -200,25 +200,6 @@ sudo certbot --dns-route53 --installer apache
 
 Follow instructions to have Certbot request and install certificate on your web server. Refer to Certbot site for [help](https://certbot.eff.org/pages/help) with this tool.  
 
-#### Configure HSTS on EC2 instance
-
-To configure [HTTP Strict Transport Security (HSTS)](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security) headers, edit `*ssl.conf` file in `/etc/apache2/sites-eanbled/` folder and add the following text between `<VirtualHost *:443>` and `</VirtualHost *:443>` rows.
-
-```
-      Header always set Strict-Transport-Security "max-age=15552000; includeSubDomains"
-```
-
-Verify Apache configuration
-
-```
-sudo apachetl -t
-```
-
-Reload Apache server
-
-```
-sudo systemctl reload apache2
-```
 
 ### Troubleshooting
 
@@ -323,6 +304,7 @@ Database login, HaRP shared key and IAM user credentials are stored in `/home/ub
 
 To futher secure your EC2 instance, you may want to
 
+- Refer to Nextcloud [Hardening and seucrity guidance](https://docs.nextcloud.com/server/stable/admin_manual/installation/harden_server.html)
 - Set a strong login user password
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
 - Disable SSH access from public internet (`allowSSHport`)
