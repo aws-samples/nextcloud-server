@@ -144,14 +144,14 @@ The following are available in **Outputs** section
 
 - `EC2console`: EC2 console URL link to your EC2 instance
 - `EC2instanceID` : EC2 Instance ID
-- `EC2instanceConnect`: [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html/) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
+- `EC2instanceConnect`: [EC2 Instance Connect](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-methods.html) URL link. Functionality is only available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html)
 - `EC2serialConsole`: [EC2 Serial Console](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-to-serial-console.html) URL. Functionality is available under [certain conditions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-serial-console-prerequisites.html).
 - `EC2iamRole`: [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) URL link to manage permissions
 - `SSMsessionManager`: [SSM Session Manager](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/connect-with-systems-manager-session-manager.html) URL link
 - `WebUrl`: EC2 web server URL link
 - `NextcloudLogUrl`: Cloudwatch [log group](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html) with the contents of [nextcloud\.log](https://docs.nextcloud.com/server/stable/admin_manual/configuration_server/logging_configuration.html)
 - `NextcloudAdminUsername`: Nextcloud admin login user name
-- `NextcloudSetPasswordCmd`: command to [set Nextcloud admin password](#nextcloud-admin-user-password). Default password is `EC2instanceID` value
+- `NextcloudSetPasswordCmd`: command to set Nextcloud admin password. Default password is `EC2instanceID` value
 
 If `installDCV` is `Yes`
 
@@ -164,7 +164,7 @@ If `installWebmin` is `Yes`
 If `enableALB` is `Yes`
 
 - `AlbConsole`: ALB console URL
-- `AlbDnsName`: ALB domain name. Create a DNS CNAME or [Route 53 alias](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html) to ALB domain name especially if you are using HTTPS listener
+- `AlbDnsName`: ALB domain name. Create a DNS CNAME or [Route 53 alias](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html) to [route traffic](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-elb-load-balancer.html) to your ALB epecially if you are using HTTPS listener
 
 ## Using Nextcloud
 
@@ -304,7 +304,7 @@ Database login, HaRP shared key and IAM user credentials are stored in `/home/ub
 
 To futher secure your EC2 instance, you may want to
 
-- Refer to Nextcloud [Hardening and seucrity guidance](https://docs.nextcloud.com/server/stable/admin_manual/installation/harden_server.html)
+- Refer to Nextcloud [Hardening and security guidance](https://docs.nextcloud.com/server/stable/admin_manual/installation/harden_server.html)
 - Set a strong login user password
 - Restrict remote administration access to your IP address only (`ingressIPv4` and `ingressIPv6`)
 - Disable SSH access from public internet (`allowSSHport`)
