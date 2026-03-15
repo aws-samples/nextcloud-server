@@ -28,7 +28,7 @@ The template provides the following features:
   - Docker Engine with [HaRP](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html#harp) for [AppAPI and External Apps (ExApps)](https://docs.nextcloud.com/server/stable/admin_manual/exapps_management/AppAPIAndExternalApps.html)
   - NVIDIA GPU driver and NVIDIA Container toolkit for [Artificial Intelligence](https://docs.nextcloud.com/server/stable/admin_manual/ai/index.html) (x86_64 NVIDIA GPU EC2 instance)
 - Applications
-  - [Apache](https://www.apache.org/) web server
+  - Apache web server with valid [IP address certificate](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)
   - [MariaDB](https://mariadb.org/) or [MySQL](https://www.mysql.com/) database server
   - [PHP 8.x](https://launchpad.net/~ondrej/+archive/ubuntu/php/) from [Ondřej Surý's](https://deb.sury.org/) [ppa:ondrej/php](https://launchpad.net/~ondrej/+archive/ubuntu/php/) repository
   - [AWS CLI v2](https://aws.amazon.com/cli/) with [auto-prompt](https://docs.aws.amazon.com/cli/latest/userguide/cli-usage-parameters-prompting.html)
@@ -99,7 +99,7 @@ ALB HTTPS listener
 EC2 Remote Administration
 
 - `ingressIPv4`: allowed IPv4 source prefix to remote administration services, e.g. `1.2.3.4/32`. You can get your source IP from [https://checkip.amazonaws.com](https://checkip.amazonaws.com). Default is `0.0.0.0/0`.
-- `ingressIPv6`: allowed IPv6 source prefix to remote administration services. Use `::1/128` to block all incoming IPv6 access. Default is `::/0`
+- `ingressIPv6`: allowed IPv6 source prefix to remote administration services. Default is `::/0`. Subnets in [default VPC](https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html) do not have [IPv6 CIDR blocks](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/working-with-ipv6-addresses.html) associated. Specify `fe80::/10` link local prefix to allow internal access only, or `::1/128` to block all inbound IPv6 access
 - `allowSSHport`: allow inbound SSH. Option does not affect [EC2 Instance Connect](https://aws.amazon.com/blogs/compute/new-using-amazon-ec2-instance-connect-for-ssh-access-to-your-ec2-instances/) access. Default is `No`
 - `installDCV`: install graphical desktop environment and [Amazon DCV](https://aws.amazon.com/hpc/dcv/) server. Default is `No`
 - `installWebmin`: install [Webmin](https://webmin.com/) web-based system administration tool. Default is `No`
@@ -176,7 +176,9 @@ Login to your Nextcloud application using `WebUrl` or `AlbUrl` link. Default pas
 
 ### Obtaining certificate for HTTPS using Certbot
 
-The EC2 instance uses a self-signed certificate for HTTPS. You can [request and export](https://aws.amazon.com/blogs/security/aws-certificate-manager-now-supports-exporting-public-certificates/) public certificate from AWS Certificate Manager and install it on your EC2 instance. You can also use [Certbot](https://certbot.eff.org/pages/about) to obtain and install free [Let's Encrypt](https://letsencrypt.org/) certificate on your web server as follows
+The EC2 instance uses a self-signed certificate for HTTPS. If `displayPublicIP` is `Yes`, template will install a valid [IPv4 address certificate](https://letsencrypt.org/2026/03/11/shorter-certs-certbot). IP address certificates are valid for 160 hours, just over six days, and [Certbot](https://letsencrypt.org/2026/03/11/shorter-certs-certbot) will attempt to renew them before expiry. To ensure proper operation, ensure `assignStaticIP` is set to `Yes`.
+
+ You can [request and export](https://aws.amazon.com/blogs/security/aws-certificate-manager-now-supports-exporting-public-certificates/) public domain validated (DV) certificate from AWS Certificate Manager and install it on your EC2 instance. You can also use [Certbot](https://certbot.eff.org/pages/about) to obtain and install free [Let's Encrypt](https://letsencrypt.org/) DV certificate on your web server as follows
 
 #### Prerequisites
 

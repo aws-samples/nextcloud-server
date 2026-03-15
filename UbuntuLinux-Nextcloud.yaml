@@ -116,7 +116,7 @@ Metadata:
       displayPublicIP:
         default: "EC2 in public subnet with public IP assigned?"
       assignStaticIP:
-        default: "Assign static public internet IPv4 address for EC2 in public subnet"
+        default: "Elastic IP: assign static public internet IPv4 address"
 
       enableALB:
         default: "Deploy Application Load Balancer (ALB)"
@@ -143,7 +143,7 @@ Metadata:
       allowSSHport:
         default: "Allow SSH from network"
       installDCV:
-        default: "Install graphical desktop environment and DCV server"
+        default: "Install graphical desktop environment and Amazon DCV server"
       installWebmin:
         default: "Install Webmin web-based system administration tool"
 
@@ -215,13 +215,13 @@ Parameters:
   vpcID:
     Type: AWS::EC2::VPC::Id
     Description: "https://console.aws.amazon.com/vpcconsole/home#vpcs:"
-    ConstraintDescription: Specify a valid value
-    AllowedPattern: ".+"
+    AllowedPattern: .+
+    ConstraintDescription: Select a VPC
   subnetID:
     Type: AWS::EC2::Subnet::Id
     Description: "https://console.aws.amazon.com/vpcconsole/home#subnets:"
-    ConstraintDescription: Specify a valid value
-    AllowedPattern: ".+"
+    AllowedPattern: .+
+    ConstraintDescription: Select a Subnet
   assignStaticIP:
     Type: String
     Description: "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html"
@@ -352,7 +352,8 @@ Parameters:
     AllowedValues:
       - "php8.3"
       - "php8.4"
-    Default: "php8.4"
+      - "php8.5"
+    Default: "php8.3"
   databaseOption:
     Type: String
     AllowedValues:
@@ -922,7 +923,10 @@ Conditions:
   sendHSTS: !Not [!Equals [!Ref albHstsHeaderValue, ""]]
 
 Mappings:
-  EICprefixMap: # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
+  # EC2 instance connect: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-connect-prerequisites.html#ec2-instance-connect-setup-security-group
+  # curl -s https://ip-ranges.amazonaws.com/ip-ranges.json | jq -r '.prefixes[] | select (.service=="EC2_INSTANCE_CONNECT")'
+  # curl -s https://ip-ranges.amazonaws.com/ip-ranges.json | jq -r '.ipv6_prefixes[] | select (.service=="EC2_INSTANCE_CONNECT")'
+  EICprefixMap:
     af-south-1:
       IpPrefix: 13.244.121.196/30
       Ipv6Prefix: 2406:da11:700:3b00::/56
@@ -1086,7 +1090,7 @@ Resources:
           - !Ref AWS::NoValue
         - !If
           - hasR53Zone
-          - PolicyName: Route53CertbotAccess
+          - PolicyName: R53acmeAccess
             PolicyDocument: # Certbot dns_route53 : https://certbot-dns-route53.readthedocs.io/en/stable/
               Version: "2012-10-17"
               Statement: # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/specifying-rrset-conditions.html
@@ -1126,7 +1130,7 @@ Resources:
       Roles:
         - !Ref instanceIamRole
 
-  securityGroup:
+  sgEC2Instance:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow inbound HTTP, HTTPS and any remote admin ports
@@ -1545,9 +1549,8 @@ Resources:
                 #!/bin/bash
                 #sysctl -w net.ipv6.conf.all.disable_ipv6=1
                 #sysctl -w net.ipv6.conf.default.disable_ipv6=1
-                export DEBIAN_FRONTEND=noninteractive
 
-                python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
+                export DEBIAN_FRONTEND=noninteractive
 
                 #
                 cd /var/www/html/
@@ -1556,9 +1559,6 @@ Resources:
 
                 apt-get update
                 apt-get upgrade -q -y
-
-                #sysctl -w net.ipv6.conf.all.disable_ipv6=0
-                #sysctl -w net.ipv6.conf.default.disable_ipv6=0
 
                 # DCV?
                 export installDCV="${installDCV}"
@@ -1574,9 +1574,60 @@ Resources:
                     ;;
                 esac
 
+                # IP address cert: https://letsencrypt.org/2026/03/11/shorter-certs-certbot
+                if [ "${displayPublicIP}" = "Yes" ]; then
+                  # Some Regions create Elastic IP after EC2 instance is created
+                  python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
+                  sleep 45
+
+                  WEB_ROOT="/var/www/html/"
+
+                  IP_ADDR=$(curl -s checkip.amazonaws.com)
+                  certbot certonly -n --agree-tos --preferred-profile shortlived --webroot --webroot-path $WEB_ROOT --ip-address $IP_ADDR
+
+                  if [ -d "/etc/letsencrypt/live/$IP_ADDR/" ]; then
+                    # Update web server cert
+                    rm -f /etc/ssl/certs/ssl-cert-snakeoil.pem
+                    rm -f /etc/ssl/private/ssl-cert-snakeoil.key
+                    ln -s -f /etc/letsencrypt/live/$IP_ADDR/fullchain.pem /etc/ssl/certs/ssl-cert-snakeoil.pem
+                    ln -s -f /etc/letsencrypt/live/$IP_ADDR/privkey.pem /etc/ssl/private/ssl-cert-snakeoil.key
+
+                    systemctl reload apache2
+
+                    # DCV TLS cert: https://docs.aws.amazon.com/dcv/latest/adminguide/manage-cert.html
+                    if [ "${installDCV}" = "Yes" ]; then
+                      cp -f /etc/letsencrypt/live/$IP_ADDR/fullchain.pem /etc/dcv/dcv.pem
+                      cp -f /etc/letsencrypt/live/$IP_ADDR/privkey.pem /etc/dcv/dcv.key
+                      chown dcv /etc/dcv/dcv.pem /etc/dcv/dcv.key
+                      chmod 600 /etc/dcv/dcv.pem /etc/dcv/dcv.key
+
+                      # post cert renewal hook
+                      mv /opt/dcv-renew-cert.sh /etc/letsencrypt/renewal-hooks/post/
+                    fi
+                  fi
+                fi
+                if [ -f "/opt/dcv-renew-cert.sh" ]; then
+                  rm /opt/dcv-renew-cert.sh
+                fi
+
+                python3 /usr/local/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ec2Instance --region ${AWS::Region}
+
                 rm -f /etc/systemd/system/dcv-post-reboot.service
                 rm -f ${!0}
                 systemctl daemon-reload
+              mode: "000755"
+              owner: "root"
+              group: "root"
+            "/opt/dcv-renew-cert.sh":
+              content: |
+                #!/bin/bash
+                CERT_FOLDER=$(curl -s checkip.amazonaws.com)
+                if [ -d "/etc/letsencrypt/live/$CERT_FOLDER/" ]; then
+                  cp -f /etc/letsencrypt/live/$CERT_FOLDER/fullchain.pem /etc/dcv/dcv.pem
+                  cp -f /etc/letsencrypt/live/$CERT_FOLDER/privkey.pem /etc/dcv/dcv.key
+                  chown dcv /etc/dcv/dcv.pem /etc/dcv/dcv.key
+                  chmod 600 /etc/dcv/dcv.pem /etc/dcv/dcv.key
+                fi
               mode: "000755"
               owner: "root"
               group: "root"
@@ -1871,7 +1922,10 @@ Resources:
                 add-apt-repository -y ppa:ondrej/apache2
 
                 # PHP and Apache install
-                apt-get install -q -y ${phpVersion} ${phpVersion}-{common,fpm,opcache,apcu,cgi} apache2 libapache2-mod-fcgid
+                apt-get install -q -y apache2 libapache2-mod-fcgid
+                apt-get install -q -y ${phpVersion} ${phpVersion}-{common,fpm,apcu} 
+                apt-get install -q -y ${phpVersion}-opcache
+
                 # https://docs.nextcloud.com/server/latest/admin_manual/installation/php_configuration.html
                 apt-get install -q -y ${phpVersion}-{xml,xmlrpc,xsl,soap,ldap,zip,bz2,intl,curl,mbstring,bcmath,imagick,gd}
                 apt-get install -q -y ${phpVersion}-{memcached,redis,mysql}
@@ -1956,10 +2010,8 @@ Resources:
                 a2enmod mpm_event proxy_fcgi setenvif
                 a2enconf ${phpVersion}-fpm
 
-                # Enable HTTPS 
-                a2enmod ssl
-                a2enmod rewrite
-                a2enmod http2
+                # Enable HTTP/2, HTTPS and rewrite
+                a2enmod headers rewrite http2 ssl mime
 
                 # HTTPS site: for Certbot
                 a2ensite default-ssl
@@ -1967,8 +2019,8 @@ Resources:
                 # Enable index.php
                 sed -i "s/\bDirectoryIndex\b/& index.php/" /etc/apache2/mods-enabled/dir.conf
 
-                # Redirect HTTP to HTTPS
-                sed -i '/\/VirtualHost/i RewriteEngine on\nRewriteRule ^ https:\/\/%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]' /etc/apache2/sites-enabled/000-default.conf
+                # Redirect HTTP to HTTPS, Allow ACME HTTP-01 challenge over HTTP
+                sed -i '/\/VirtualHost/i RewriteEngine on\nRewriteCond %{REQUEST_URI} !\/\\.well\\-known\/?.*\nRewriteRule ^ https:\/\/%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]' /etc/apache2/sites-enabled/000-default.conf 
 
                 # Change permissions and ownership
                 usermod -a -G www-data ubuntu
@@ -2379,7 +2431,7 @@ Resources:
       DisableApiTermination: !If [enableProtection, true, false]
       EbsOptimized: true
       SecurityGroupIds:
-        - !Ref securityGroup
+        - !Ref sgEC2Instance
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
