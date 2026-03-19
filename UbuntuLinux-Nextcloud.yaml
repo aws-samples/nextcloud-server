@@ -1552,6 +1552,14 @@ Resources:
 
                 export DEBIAN_FRONTEND=noninteractive
 
+                # Add DCV ports
+                if (systemctl status ufw | grep -q Loaded); then
+                  ufw allow 8443/tcp
+                  ufw allow 8443/udp
+                  ufw allow https
+                  ufw allow http
+                fi
+
                 #
                 cd /var/www/html/
                 sudo -u www-data php /var/www/html/occ maintenance:repair --include-expensive
@@ -1627,6 +1635,9 @@ Resources:
                   cp -f /etc/letsencrypt/live/$CERT_FOLDER/privkey.pem /etc/dcv/dcv.key
                   chown dcv /etc/dcv/dcv.pem /etc/dcv/dcv.key
                   chmod 600 /etc/dcv/dcv.pem /etc/dcv/dcv.key
+                  if (systemctl status apache2 | grep -q running); then
+                    systemctl reload apache2
+                  fi
                 fi
               mode: "000755"
               owner: "root"
